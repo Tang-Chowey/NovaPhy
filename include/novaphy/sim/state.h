@@ -20,6 +20,12 @@ struct SimState {
     /// Clear all accumulated forces/torques (called each step)
     void clear_forces();
 
+    /// Set linear velocity for a body
+    void set_linear_velocity(int body_index, const Vec3f& vel);
+
+    /// Set angular velocity for a body
+    void set_angular_velocity(int body_index, const Vec3f& vel);
+
     /// Apply an external force at the body's center of mass
     void apply_force(int body_index, const Vec3f& force);
 

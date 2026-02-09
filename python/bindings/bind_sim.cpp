@@ -51,6 +51,10 @@ void bind_sim(py::module_& m) {
         .def_readonly("transforms", &SimState::transforms)
         .def_readonly("linear_velocities", &SimState::linear_velocities)
         .def_readonly("angular_velocities", &SimState::angular_velocities)
+        .def("set_linear_velocity", &SimState::set_linear_velocity,
+             py::arg("body_index"), py::arg("velocity"))
+        .def("set_angular_velocity", &SimState::set_angular_velocity,
+             py::arg("body_index"), py::arg("velocity"))
         .def("apply_force", &SimState::apply_force)
         .def("apply_torque", &SimState::apply_torque);
 

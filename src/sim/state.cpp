@@ -15,6 +15,18 @@ void SimState::clear_forces() {
     for (auto& t : torques) t = Vec3f::Zero();
 }
 
+void SimState::set_linear_velocity(int body_index, const Vec3f& vel) {
+    if (body_index >= 0 && body_index < static_cast<int>(linear_velocities.size())) {
+        linear_velocities[body_index] = vel;
+    }
+}
+
+void SimState::set_angular_velocity(int body_index, const Vec3f& vel) {
+    if (body_index >= 0 && body_index < static_cast<int>(angular_velocities.size())) {
+        angular_velocities[body_index] = vel;
+    }
+}
+
 void SimState::apply_force(int body_index, const Vec3f& force) {
     if (body_index >= 0 && body_index < static_cast<int>(forces.size())) {
         forces[body_index] += force;
