@@ -3,6 +3,8 @@
 pybind11_add_module(_core
     bind_main.cpp
     bind_math.cpp
+    bind_core.cpp
+    bind_collision.cpp
 )
 
 target_link_libraries(_core PRIVATE

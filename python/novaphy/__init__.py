@@ -12,6 +12,16 @@ from novaphy._core import (
     spatial_inertia_matrix,
     deg2rad,
     rad2deg,
+    # Core types
+    ShapeType,
+    RigidBody,
+    CollisionShape,
+    AABB,
+    ContactPoint,
+    # Collision
+    BroadPhasePair,
+    SweepAndPrune,
+    collide_shapes,
 )
 
 __version__ = version()
@@ -26,4 +36,12 @@ __all__ = [
     "spatial_inertia_matrix",
     "deg2rad",
     "rad2deg",
+    "ShapeType",
+    "RigidBody",
+    "CollisionShape",
+    "AABB",
+    "ContactPoint",
+    "BroadPhasePair",
+    "SweepAndPrune",
+    "collide_shapes",
 ]
