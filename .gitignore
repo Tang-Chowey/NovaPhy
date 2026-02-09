@@ -42,3 +42,7 @@ nul
 # Env
 .env
 *.egg
+
+#gui
+.polyscope.ini
+imgui.ini
