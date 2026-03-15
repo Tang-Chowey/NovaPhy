@@ -127,6 +127,7 @@ from novaphy._core import (
     SceneBuilderEngine,
     SimulationExporter,
     FeatureCompletenessChecker,
+    batch_transform_vertices,
 )
 
 # Optional IPC support (requires CUDA + libuipc)
@@ -204,6 +205,7 @@ __all__ = [
     "SceneBuilderEngine",
     "SimulationExporter",
     "FeatureCompletenessChecker",
+    "batch_transform_vertices",
 ]
 
 # Conditionally export IPC symbols
