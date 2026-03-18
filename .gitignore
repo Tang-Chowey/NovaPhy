@@ -52,3 +52,6 @@ ipc_workspace/
 #gui
 .polyscope.ini
 imgui.ini
+
+# Demos checkpoints (weights)
+demos/checkpoints/
