@@ -9,6 +9,7 @@ add_library(novaphy_core STATIC
     core/joint.cpp
     collision/broadphase.cpp
     collision/narrowphase.cpp
+    collision/narrowphase_sat.cpp
     dynamics/integrator.cpp
     dynamics/free_body_solver.cpp
     dynamics/featherstone.cpp
