@@ -65,12 +65,82 @@ struct UrdfJoint {
     float upper_limit = 0.0f;
     float effort_limit = 0.0f;
     float velocity_limit = 0.0f;
+    float damping = 0.0f;
+    float friction = 0.0f;
 };
 
 struct UrdfModelData {
     std::string name;
     std::vector<UrdfLink> links;
     std::vector<UrdfJoint> joints;
+};
+
+struct UrdfImportOptions {
+    bool floating_base = true;
+    bool enable_self_collisions = true;
+    bool collapse_fixed_joints = false;
+    bool use_visual_collision_fallback = false;
+    bool ignore_inertial_definitions = false;
+    Transform root_transform = Transform::identity();
+};
+
+struct SceneLinkMetadata {
+    std::string link_name;
+    std::string parent_link_name;
+    std::string joint_name;
+    std::string body_link_name;
+    int urdf_link_index = -1;
+    int body_index = -1;
+    int articulation_index = -1;
+    bool collapsed = false;
+};
+
+struct SceneJointMetadata {
+    std::string joint_name;
+    std::string parent_link_name;
+    std::string child_link_name;
+    std::string joint_type;
+    int urdf_joint_index = -1;
+    int articulation_index = -1;
+    int q_start = -1;
+    int qd_start = -1;
+    int num_q = 0;
+    int num_qd = 0;
+    float lower_limit = 0.0f;
+    float upper_limit = 0.0f;
+    float effort_limit = 0.0f;
+    float velocity_limit = 0.0f;
+    float damping = 0.0f;
+    float friction = 0.0f;
+    bool collapsed = false;
+};
+
+struct SceneShapeMetadata {
+    int shape_index = -1;
+    int body_index = -1;
+    int articulation_index = -1;
+    int urdf_link_index = -1;
+    std::string link_name;
+    std::string body_link_name;
+    std::string geometry_type;
+    std::string source;
+};
+
+struct SceneBuildMetadata {
+    UrdfImportOptions import_options;
+    std::string root_link_name;
+    int root_body_index = -1;
+    int root_articulation_index = -1;
+    std::vector<std::string> link_names;
+    std::vector<std::string> joint_names;
+    std::vector<std::string> topological_link_order;
+    std::vector<std::string> articulation_link_names;
+    std::vector<std::string> dof_joint_names;
+    std::vector<int> dof_qd_indices;
+    std::vector<SceneLinkMetadata> links;
+    std::vector<SceneJointMetadata> joints;
+    std::vector<SceneShapeMetadata> shapes;
+    std::vector<std::pair<std::string, std::string>> filtered_link_pairs;
 };
 
 struct UsdAnimationTrack {
@@ -103,6 +173,9 @@ struct UsdStageData {
 struct SceneBuildResult {
     Model model;
     Articulation articulation;
+    SceneBuildMetadata metadata;
+    VecXf initial_q = VecXf::Zero(0);
+    VecXf initial_qd = VecXf::Zero(0);
     std::vector<std::string> warnings;
 };
 

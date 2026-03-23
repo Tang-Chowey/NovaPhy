@@ -5,6 +5,7 @@
 #include "novaphy/core/articulation.h"
 #include "novaphy/core/joint.h"
 #include "novaphy/dynamics/articulated_solver.h"
+#include "novaphy/dynamics/xpbd_solver.h"
 #include "novaphy/dynamics/featherstone.h"
 
 namespace py = pybind11;
@@ -49,6 +50,15 @@ void bind_dynamics(py::module_& m) {
         )pbdoc")
         .def_readwrite("parent_to_joint", &Joint::parent_to_joint, R"pbdoc(
             Transform from parent-link frame to joint frame.
+        )pbdoc")
+        .def_readwrite("limit_enabled", &Joint::limit_enabled, R"pbdoc(
+            bool: Whether lower/upper position limits are active.
+        )pbdoc")
+        .def_readwrite("lower_limit", &Joint::lower_limit, R"pbdoc(
+            float: Lower position limit for revolute/slide joints.
+        )pbdoc")
+        .def_readwrite("upper_limit", &Joint::upper_limit, R"pbdoc(
+            float: Upper position limit for revolute/slide joints.
         )pbdoc")
         .def("num_q", &Joint::num_q, R"pbdoc(
             Returns the number of generalized position coordinates for this joint.
@@ -216,4 +226,76 @@ void bind_dynamics(py::module_& m) {
             Returns:
                 tuple[ndarray, ndarray]: Updated `(q, qd)` state.
         )pbdoc");
+
+    py::class_<XPBDSolverSettings>(m, "XPBDSolverSettings", R"pbdoc(
+        Runtime settings for the articulated XPBD solver scaffold.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("substeps", &XPBDSolverSettings::substeps)
+        .def_readwrite("iterations", &XPBDSolverSettings::iterations)
+        .def_readwrite("velocity_damping", &XPBDSolverSettings::velocity_damping)
+        .def_readwrite("contact_relaxation", &XPBDSolverSettings::contact_relaxation)
+        .def_readwrite("friction_damping", &XPBDSolverSettings::friction_damping);
+
+    py::class_<XPBDStepStats>(m, "XPBDStepStats", R"pbdoc(
+        Runtime statistics from the most recent XPBD step.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readonly("substeps", &XPBDStepStats::substeps)
+        .def_readonly("iterations", &XPBDStepStats::iterations)
+        .def_readonly("projected_constraints", &XPBDStepStats::projected_constraints)
+        .def_readonly("contact_count", &XPBDStepStats::contact_count);
+
+    py::enum_<JointDriveMode>(m, "JointDriveMode")
+        .value("Off", JointDriveMode::Off)
+        .value("TargetPosition", JointDriveMode::TargetPosition);
+
+    py::class_<XPBDJointDrive>(m, "XPBDJointDrive")
+        .def(py::init<>())
+        .def_readwrite("mode", &XPBDJointDrive::mode)
+        .def_readwrite("target_position", &XPBDJointDrive::target_position)
+        .def_readwrite("stiffness", &XPBDJointDrive::stiffness)
+        .def_readwrite("damping", &XPBDJointDrive::damping);
+
+    py::class_<XPBDControl>(m, "XPBDControl")
+        .def(py::init<>())
+        .def_readwrite("joint_drives", &XPBDControl::joint_drives);
+
+    py::class_<XPBDSolver>(m, "XPBDSolver", R"pbdoc(
+        Reduced-coordinate XPBD solver scaffold for articulated systems.
+    )pbdoc")
+        .def(py::init<XPBDSolverSettings>(), py::arg("settings") = XPBDSolverSettings())
+        .def_property("settings",
+            [](XPBDSolver& self) -> XPBDSolverSettings& { return self.settings(); },
+            [](XPBDSolver& self, const XPBDSolverSettings& settings) {
+                self.settings() = settings;
+            },
+            py::return_value_policy::reference_internal)
+        .def_property_readonly("last_stats", &XPBDSolver::last_stats,
+            py::return_value_policy::reference_internal)
+        .def("step", [](XPBDSolver& self, const Articulation& model,
+                         VecXf q, VecXf qd, const VecXf& tau,
+                         const Vec3f& gravity, float dt,
+                         const XPBDControl& control) {
+            self.step(model, q, qd, tau, gravity, dt, control);
+            return std::make_pair(q, qd);
+        }, py::arg("model"), py::arg("q"), py::arg("qd"),
+           py::arg("tau"), py::arg("gravity"), py::arg("dt"),
+           py::arg("control") = XPBDControl())
+        .def("step_with_contacts", [](XPBDSolver& self,
+                                       const Articulation& model,
+                                       const Model& collision_model,
+                                       const std::vector<CollisionShape>& static_shapes,
+                                       VecXf q,
+                                       VecXf qd,
+                                       const VecXf& tau,
+                                       const Vec3f& gravity,
+                                       float dt,
+                                       const XPBDControl& control) {
+            std::vector<ContactPoint> contacts;
+            self.step_with_contacts(model, collision_model, static_shapes, q, qd, tau, gravity, dt, control, &contacts);
+            return py::make_tuple(q, qd, contacts);
+        }, py::arg("model"), py::arg("collision_model"), py::arg("static_shapes"),
+           py::arg("q"), py::arg("qd"), py::arg("tau"), py::arg("gravity"), py::arg("dt"),
+           py::arg("control") = XPBDControl());
 }

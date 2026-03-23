@@ -1,10 +1,11 @@
-#include <pybind11/pybind11.h>
+﻿#include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
 #include "novaphy/core/model.h"
 #include "novaphy/core/model_builder.h"
+#include "novaphy/sim/articulated_world.h"
 #include "novaphy/sim/state.h"
 #include "novaphy/sim/world.h"
 
@@ -12,6 +13,12 @@ namespace py = pybind11;
 using namespace novaphy;
 
 void bind_sim(py::module_& m) {
+    py::class_<CollisionFilterPair>(m, "CollisionFilterPair", R"pbdoc(
+        Disabled collision pair stored in shape-index space.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("shape_a", &CollisionFilterPair::shape_a)
+        .def_readwrite("shape_b", &CollisionFilterPair::shape_b);
     // --- ModelBuilder ---
     py::class_<ModelBuilder>(m, "ModelBuilder", R"pbdoc(
         Builder for constructing an immutable simulation model.
@@ -83,6 +90,12 @@ void bind_sim(py::module_& m) {
         )pbdoc")
         .def_readonly("bodies", &Model::bodies, R"pbdoc(
             list[RigidBody]: Body inertial properties.
+        )pbdoc")
+        .def_readonly("initial_transforms", &Model::initial_transforms, R"pbdoc(
+            list[Transform]: Initial world transform per body.
+        )pbdoc")
+        .def_readonly("collision_filter_pairs", &Model::collision_filter_pairs, R"pbdoc(
+            list[CollisionFilterPair]: Disabled shape pairs used to skip narrowphase.
         )pbdoc")
         .def_readonly("shapes", &Model::shapes, R"pbdoc(
             list[CollisionShape]: Collision shape definitions.
@@ -204,7 +217,7 @@ void bind_sim(py::module_& m) {
              },
              R"pbdoc(
                  Returns all body transforms as a pair of NumPy arrays in one
-                 C++ call, avoiding per-body Python↔C++ boundary crossings.
+                 C++ call, avoiding per-body Python鈫擟++ boundary crossings.
 
                  Returns:
                      tuple[np.ndarray, np.ndarray]:
@@ -360,4 +373,48 @@ void bind_sim(py::module_& m) {
                  Returns:
                      None
              )pbdoc");
+
+    py::class_<ArticulatedWorld>(m, "ArticulatedWorld", R"pbdoc(
+        High-level articulated simulation container backed by XPBD.
+    )pbdoc")
+        .def(py::init([](const SceneBuildResult& scene) {
+                 return ArticulatedWorld(scene, XPBDSolverSettings{});
+             }),
+             py::arg("scene"))
+        .def(py::init<const SceneBuildResult&, XPBDSolverSettings>(),
+             py::arg("scene"),
+             py::arg("solver_settings"))
+        .def("step", &ArticulatedWorld::step, py::arg("dt"),
+             py::call_guard<py::gil_scoped_release>())
+        .def("set_gravity", &ArticulatedWorld::set_gravity, py::arg("gravity"))
+        .def_property_readonly("gravity", &ArticulatedWorld::gravity)
+        .def_property("q",
+            [](const ArticulatedWorld& self) { return self.q(); },
+            &ArticulatedWorld::set_q)
+        .def_property("qd",
+            [](const ArticulatedWorld& self) { return self.qd(); },
+            &ArticulatedWorld::set_qd)
+        .def_property_readonly("joint_names", &ArticulatedWorld::joint_names)
+        .def_property_readonly("joint_positions", &ArticulatedWorld::joint_positions)
+        .def_property_readonly("contacts", &ArticulatedWorld::contacts,
+            py::return_value_policy::reference_internal)
+        .def_property_readonly("metadata", &ArticulatedWorld::metadata,
+            py::return_value_policy::reference_internal)
+        .def_property_readonly("solver", py::overload_cast<>(&ArticulatedWorld::solver),
+            py::return_value_policy::reference_internal)
+        .def("set_joint_positions", &ArticulatedWorld::set_joint_positions,
+             py::arg("positions"))
+        .def("set_default_drive_gains", &ArticulatedWorld::set_default_drive_gains,
+             py::arg("stiffness"), py::arg("damping"))
+        .def("clear_target_positions", &ArticulatedWorld::clear_target_positions)
+        .def("set_target_positions", &ArticulatedWorld::set_target_positions,
+             py::arg("targets"))
+        .def("add_static_shape", &ArticulatedWorld::add_static_shape, py::arg("shape"))
+        .def("add_ground_plane", &ArticulatedWorld::add_ground_plane,
+             py::arg("normal"),
+             py::arg("offset"),
+             py::arg("friction") = 0.8f,
+             py::arg("restitution") = 0.0f);
 }
+
+

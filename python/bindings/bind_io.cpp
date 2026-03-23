@@ -1,10 +1,10 @@
-#include <pybind11/eigen.h>
+﻿#include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl/filesystem.h>
 #include <pybind11/stl.h>
 
-#include "novaphy/io/openusd_importer.h"
 #include "novaphy/io/feature_completeness.h"
+#include "novaphy/io/openusd_importer.h"
 #include "novaphy/io/scene_builder.h"
 #include "novaphy/io/simulation_exporter.h"
 #include "novaphy/io/urdf_parser.h"
@@ -66,13 +66,83 @@ void bind_io(py::module_& m) {
         .def_readwrite("lower_limit", &UrdfJoint::lower_limit)
         .def_readwrite("upper_limit", &UrdfJoint::upper_limit)
         .def_readwrite("effort_limit", &UrdfJoint::effort_limit)
-        .def_readwrite("velocity_limit", &UrdfJoint::velocity_limit);
+        .def_readwrite("velocity_limit", &UrdfJoint::velocity_limit)
+        .def_readwrite("damping", &UrdfJoint::damping)
+        .def_readwrite("friction", &UrdfJoint::friction);
 
     py::class_<UrdfModelData>(m, "UrdfModelData")
         .def(py::init<>())
         .def_readwrite("name", &UrdfModelData::name)
         .def_readwrite("links", &UrdfModelData::links)
         .def_readwrite("joints", &UrdfModelData::joints);
+
+    py::class_<UrdfImportOptions>(m, "UrdfImportOptions")
+        .def(py::init<>())
+        .def_readwrite("floating_base", &UrdfImportOptions::floating_base)
+        .def_readwrite("enable_self_collisions", &UrdfImportOptions::enable_self_collisions)
+        .def_readwrite("collapse_fixed_joints", &UrdfImportOptions::collapse_fixed_joints)
+        .def_readwrite("use_visual_collision_fallback", &UrdfImportOptions::use_visual_collision_fallback)
+        .def_readwrite("ignore_inertial_definitions", &UrdfImportOptions::ignore_inertial_definitions)
+        .def_readwrite("root_transform", &UrdfImportOptions::root_transform);
+
+    py::class_<SceneLinkMetadata>(m, "SceneLinkMetadata")
+        .def(py::init<>())
+        .def_readwrite("link_name", &SceneLinkMetadata::link_name)
+        .def_readwrite("parent_link_name", &SceneLinkMetadata::parent_link_name)
+        .def_readwrite("joint_name", &SceneLinkMetadata::joint_name)
+        .def_readwrite("body_link_name", &SceneLinkMetadata::body_link_name)
+        .def_readwrite("urdf_link_index", &SceneLinkMetadata::urdf_link_index)
+        .def_readwrite("body_index", &SceneLinkMetadata::body_index)
+        .def_readwrite("articulation_index", &SceneLinkMetadata::articulation_index)
+        .def_readwrite("collapsed", &SceneLinkMetadata::collapsed);
+
+    py::class_<SceneJointMetadata>(m, "SceneJointMetadata")
+        .def(py::init<>())
+        .def_readwrite("joint_name", &SceneJointMetadata::joint_name)
+        .def_readwrite("parent_link_name", &SceneJointMetadata::parent_link_name)
+        .def_readwrite("child_link_name", &SceneJointMetadata::child_link_name)
+        .def_readwrite("joint_type", &SceneJointMetadata::joint_type)
+        .def_readwrite("urdf_joint_index", &SceneJointMetadata::urdf_joint_index)
+        .def_readwrite("articulation_index", &SceneJointMetadata::articulation_index)
+        .def_readwrite("q_start", &SceneJointMetadata::q_start)
+        .def_readwrite("qd_start", &SceneJointMetadata::qd_start)
+        .def_readwrite("num_q", &SceneJointMetadata::num_q)
+        .def_readwrite("num_qd", &SceneJointMetadata::num_qd)
+        .def_readwrite("lower_limit", &SceneJointMetadata::lower_limit)
+        .def_readwrite("upper_limit", &SceneJointMetadata::upper_limit)
+        .def_readwrite("effort_limit", &SceneJointMetadata::effort_limit)
+        .def_readwrite("velocity_limit", &SceneJointMetadata::velocity_limit)
+        .def_readwrite("damping", &SceneJointMetadata::damping)
+        .def_readwrite("friction", &SceneJointMetadata::friction)
+        .def_readwrite("collapsed", &SceneJointMetadata::collapsed);
+
+    py::class_<SceneShapeMetadata>(m, "SceneShapeMetadata")
+        .def(py::init<>())
+        .def_readwrite("shape_index", &SceneShapeMetadata::shape_index)
+        .def_readwrite("body_index", &SceneShapeMetadata::body_index)
+        .def_readwrite("articulation_index", &SceneShapeMetadata::articulation_index)
+        .def_readwrite("urdf_link_index", &SceneShapeMetadata::urdf_link_index)
+        .def_readwrite("link_name", &SceneShapeMetadata::link_name)
+        .def_readwrite("body_link_name", &SceneShapeMetadata::body_link_name)
+        .def_readwrite("geometry_type", &SceneShapeMetadata::geometry_type)
+        .def_readwrite("source", &SceneShapeMetadata::source);
+
+    py::class_<SceneBuildMetadata>(m, "SceneBuildMetadata")
+        .def(py::init<>())
+        .def_readwrite("import_options", &SceneBuildMetadata::import_options)
+        .def_readwrite("root_link_name", &SceneBuildMetadata::root_link_name)
+        .def_readwrite("root_body_index", &SceneBuildMetadata::root_body_index)
+        .def_readwrite("root_articulation_index", &SceneBuildMetadata::root_articulation_index)
+        .def_readwrite("link_names", &SceneBuildMetadata::link_names)
+        .def_readwrite("joint_names", &SceneBuildMetadata::joint_names)
+        .def_readwrite("topological_link_order", &SceneBuildMetadata::topological_link_order)
+        .def_readwrite("articulation_link_names", &SceneBuildMetadata::articulation_link_names)
+        .def_readwrite("dof_joint_names", &SceneBuildMetadata::dof_joint_names)
+        .def_readwrite("dof_qd_indices", &SceneBuildMetadata::dof_qd_indices)
+        .def_readwrite("links", &SceneBuildMetadata::links)
+        .def_readwrite("joints", &SceneBuildMetadata::joints)
+        .def_readwrite("shapes", &SceneBuildMetadata::shapes)
+        .def_readwrite("filtered_link_pairs", &SceneBuildMetadata::filtered_link_pairs);
 
     py::class_<UsdAnimationTrack>(m, "UsdAnimationTrack")
         .def(py::init<>())
@@ -105,6 +175,9 @@ void bind_io(py::module_& m) {
         .def(py::init<>())
         .def_readwrite("model", &SceneBuildResult::model)
         .def_readwrite("articulation", &SceneBuildResult::articulation)
+        .def_readwrite("metadata", &SceneBuildResult::metadata)
+        .def_readwrite("initial_q", &SceneBuildResult::initial_q)
+        .def_readwrite("initial_qd", &SceneBuildResult::initial_qd)
         .def_readwrite("warnings", &SceneBuildResult::warnings);
 
     py::class_<FeatureCheckItem>(m, "FeatureCheckItem")
@@ -155,7 +228,8 @@ void bind_io(py::module_& m) {
 
     py::class_<SceneBuilderEngine>(m, "SceneBuilderEngine")
         .def(py::init<>())
-        .def("build_from_urdf", &SceneBuilderEngine::build_from_urdf, py::arg("urdf_model"))
+        .def("build_from_urdf", &SceneBuilderEngine::build_from_urdf,
+             py::arg("urdf_model"), py::arg("options") = UrdfImportOptions())
         .def("build_from_openusd", &SceneBuilderEngine::build_from_openusd, py::arg("stage"));
 
     py::class_<SimulationExporter>(m, "SimulationExporter")

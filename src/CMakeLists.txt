@@ -14,6 +14,8 @@ add_library(novaphy_core STATIC
     dynamics/free_body_solver.cpp
     dynamics/featherstone.cpp
     dynamics/articulated_solver.cpp
+    dynamics/xpbd_solver.cpp
+    sim/articulated_world.cpp
     sim/performance_monitor.cpp
     sim/state.cpp
     sim/world.cpp

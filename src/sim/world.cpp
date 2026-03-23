@@ -95,6 +95,10 @@ void World::step_rigid_pipeline(float dt) {
                                                   "world.narrowphase.total");
         const auto& pairs = broadphase_.get_pairs();
         for (const auto& pair : pairs) {
+            if (model_.is_collision_pair_filtered(pair.body_a, pair.body_b)) {
+                continue;
+            }
+
             const auto& sa = model_.shapes[pair.body_a];
             const auto& sb = model_.shapes[pair.body_b];
 

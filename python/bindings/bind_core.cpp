@@ -1,5 +1,5 @@
+﻿#include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
-#include <pybind11/eigen.h>
 #include <pybind11/stl.h>
 
 #include "novaphy/core/aabb.h"
@@ -82,6 +82,19 @@ void bind_core(py::module_& m) {
 
                          Returns:
                              RigidBody: Body with isotropic inertia tensor.
+                     )pbdoc")
+        .def_static("from_cylinder", &RigidBody::from_cylinder,
+                     py::arg("mass"), py::arg("radius"), py::arg("length"),
+                     R"pbdoc(
+                         Constructs a rigid body with solid-cylinder inertia aligned with +Z.
+
+                         Args:
+                             mass (float): Body mass in kilograms.
+                             radius (float): Cylinder radius in meters.
+                             length (float): Cylinder length in meters.
+
+                         Returns:
+                             RigidBody: Body with diagonal cylinder inertia tensor.
                      )pbdoc")
         .def_static("make_static", &RigidBody::make_static, R"pbdoc(
             Creates an immovable rigid body.

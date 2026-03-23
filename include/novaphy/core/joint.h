@@ -28,6 +28,9 @@ struct Joint {
     int parent = -1;                       /**< Parent link index, or -1 for world root. */
 
     Transform parent_to_joint = Transform::identity();  /**< Constant transform from parent frame to joint frame. */
+    bool limit_enabled = false;                       /**< Whether lower/upper position limits are active. */
+    float lower_limit = 0.0f;                        /**< Lower position limit for revolute/slide joints. */
+    float upper_limit = 0.0f;                        /**< Upper position limit for revolute/slide joints. */
 
     /**
      * @brief Get number of generalized position coordinates for this joint.

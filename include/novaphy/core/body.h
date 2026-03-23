@@ -1,4 +1,6 @@
-#pragma once
+﻿#pragma once
+
+#include <cmath>
 
 #include "novaphy/math/math_types.h"
 #include "novaphy/math/spatial.h"
@@ -13,7 +15,7 @@ namespace novaphy {
  * dynamics solvers in SI units.
  */
 struct RigidBody {
-    float mass = 1.0f;             /**< Body mass in kilograms (kg). */
+    float mass = 1.0f;                  /**< Body mass in kilograms (kg). */
     Mat3f inertia = Mat3f::Identity();  /**< Body-frame inertia tensor about CoM (kg*m^2). */
     Vec3f com = Vec3f::Zero();          /**< Center of mass in body-local coordinates (m). */
 
@@ -86,6 +88,29 @@ struct RigidBody {
         b.mass = m;
         float I = (2.0f / 5.0f) * m * radius * radius;
         b.inertia = Mat3f::Identity() * I;
+        return b;
+    }
+
+    /**
+     * @brief Construct a rigid body with solid-cylinder inertia.
+     *
+     * @details The cylinder is aligned with the local +Z axis. Use an external
+     * transform to rotate it into a different frame.
+     *
+     * @param [in] m Body mass in kilograms.
+     * @param [in] radius Cylinder radius in meters.
+     * @param [in] length Cylinder length in meters.
+     * @return RigidBody with diagonal inertia for a solid cylinder.
+     */
+    static RigidBody from_cylinder(float m, float radius, float length) {
+        RigidBody b;
+        b.mass = m;
+        const float Ixx = (m / 12.0f) * (3.0f * radius * radius + length * length);
+        const float Izz = 0.5f * m * radius * radius;
+        b.inertia = Mat3f::Zero();
+        b.inertia(0, 0) = Ixx;
+        b.inertia(1, 1) = Ixx;
+        b.inertia(2, 2) = Izz;
         return b;
     }
 

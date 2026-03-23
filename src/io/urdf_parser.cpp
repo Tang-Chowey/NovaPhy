@@ -186,6 +186,10 @@ UrdfModelData UrdfParser::parse_file(const std::filesystem::path& urdf_path) con
             joint.effort_limit = limit_elem->FloatAttribute("effort", 0.0f);
             joint.velocity_limit = limit_elem->FloatAttribute("velocity", 0.0f);
         }
+        if (const tinyxml2::XMLElement* dynamics_elem = joint_elem->FirstChildElement("dynamics")) {
+            joint.damping = dynamics_elem->FloatAttribute("damping", 0.0f);
+            joint.friction = dynamics_elem->FloatAttribute("friction", 0.0f);
+        }
         model.joints.push_back(joint);
     }
 
@@ -236,6 +240,9 @@ std::string UrdfParser::write_string(const UrdfModelData& model) const {
         out << "    <axis xyz=\"" << joint.axis.x() << " " << joint.axis.y() << " " << joint.axis.z() << "\"/>\n";
         out << "    <limit lower=\"" << joint.lower_limit << "\" upper=\"" << joint.upper_limit
             << "\" effort=\"" << joint.effort_limit << "\" velocity=\"" << joint.velocity_limit << "\"/>\n";
+        if (joint.damping != 0.0f || joint.friction != 0.0f) {
+            out << "    <dynamics damping=\"" << joint.damping << "\" friction=\"" << joint.friction << "\"/>\n";
+        }
         out << "  </joint>\n";
     }
 
