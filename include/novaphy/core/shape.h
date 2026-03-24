@@ -8,7 +8,7 @@ namespace novaphy {
 /**
  * @brief Supported collision-shape primitives.
  */
-enum class ShapeType { Box, Sphere, Plane };
+enum class ShapeType { Box, Sphere, Plane, Cylinder };
 
 /**
  * @brief Box primitive described by local half extents.
@@ -22,6 +22,14 @@ struct BoxShape {
  */
 struct SphereShape {
     float radius = 0.5f;  /**< Sphere radius in meters. */
+};
+
+/**
+ * @brief Cylinder primitive aligned along local Z axis.
+ */
+struct CylinderShape {
+    float radius = 0.5f;       /**< Cylinder radius in meters. */
+    float half_length = 0.5f;  /**< Half-length along Z axis in meters. */
 };
 
 /**
@@ -43,9 +51,10 @@ struct PlaneShape {
 struct CollisionShape {
     ShapeType type = ShapeType::Box;  /**< Active primitive type. */
 
-    BoxShape box;        /**< Box primitive payload. */
-    SphereShape sphere;  /**< Sphere primitive payload. */
-    PlaneShape plane;    /**< Plane primitive payload. */
+    BoxShape box;            /**< Box primitive payload. */
+    SphereShape sphere;      /**< Sphere primitive payload. */
+    PlaneShape plane;        /**< Plane primitive payload. */
+    CylinderShape cylinder;  /**< Cylinder primitive payload. */
 
     Transform local_transform = Transform::identity();  /**< Shape pose in parent-body local frame. */
     float friction = 0.5f;                              /**< Coulomb friction coefficient (dimensionless). */
@@ -66,6 +75,9 @@ struct CollisionShape {
                 return AABB::from_oriented_box(box.half_extents, world);
             case ShapeType::Sphere:
                 return AABB::from_sphere(world.position, sphere.radius);
+            case ShapeType::Cylinder:
+                return AABB::from_oriented_cylinder(cylinder.radius,
+                                                    cylinder.half_length, world);
             case ShapeType::Plane:
                 // Planes are infinite; use a very large AABB
                 return AABB(Vec3f::Constant(-1e6f), Vec3f::Constant(1e6f));
@@ -135,6 +147,31 @@ struct CollisionShape {
         s.plane.normal = normal.normalized();
         s.plane.offset = offset;
         s.body_index = -1;  // planes are typically world-owned
+        s.friction = friction;
+        s.restitution = restitution;
+        return s;
+    }
+
+    /**
+     * @brief Create a cylinder collision shape aligned along local Z.
+     *
+     * @param [in] radius Cylinder radius in meters.
+     * @param [in] half_length Half-length along local Z axis in meters.
+     * @param [in] body_idx Owning body index.
+     * @param [in] local Local transform from body frame to shape frame.
+     * @param [in] friction Friction coefficient.
+     * @param [in] restitution Restitution coefficient.
+     * @return Constructed cylinder shape descriptor.
+     */
+    static CollisionShape make_cylinder(float radius, float half_length, int body_idx,
+                                        const Transform& local = Transform::identity(),
+                                        float friction = 0.5f, float restitution = 0.3f) {
+        CollisionShape s;
+        s.type = ShapeType::Cylinder;
+        s.cylinder.radius = radius;
+        s.cylinder.half_length = half_length;
+        s.body_index = body_idx;
+        s.local_transform = local;
         s.friction = friction;
         s.restitution = restitution;
         return s;

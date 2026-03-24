@@ -379,23 +379,396 @@
  }
  
  }  // namespace narrowphase
- 
+
+ // ---- Cylinder helper: extract world-space axis segment endpoints ----
+ namespace {
+ struct CylinderAxis {
+     Vec3f p0;     // bottom center (local -Z)
+     Vec3f p1;     // top center (local +Z)
+     Vec3f dir;    // unit axis direction (p1 - p0).normalized()
+     Vec3f center; // midpoint
+ };
+
+ CylinderAxis cylinder_world_axis(const CollisionShape& cyl, const Transform& tc) {
+     Transform w = tc * cyl.local_transform;
+     Vec3f axis_dir = w.transform_vector(Vec3f(0, 0, 1));
+     float h = cyl.cylinder.half_length;
+     CylinderAxis ca;
+     ca.center = w.position;
+     ca.dir = axis_dir.normalized();
+     ca.p0 = ca.center - ca.dir * h;
+     ca.p1 = ca.center + ca.dir * h;
+     return ca;
+ }
+
+ // Closest point on line segment AB to point P. Returns parameter t in [0,1].
+ float closest_point_segment(const Vec3f& A, const Vec3f& B, const Vec3f& P, Vec3f& closest) {
+     Vec3f AB = B - A;
+     float ab2 = AB.squaredNorm();
+     if (ab2 < 1e-12f) { closest = A; return 0.0f; }
+     float t = clampf((P - A).dot(AB) / ab2, 0.0f, 1.0f);
+     closest = A + t * AB;
+     return t;
+ }
+
+ // Closest approach between two segments (A0-A1) and (B0-B1).
+ void closest_segments(const Vec3f& A0, const Vec3f& A1,
+                       const Vec3f& B0, const Vec3f& B1,
+                       Vec3f& closestA, Vec3f& closestB) {
+     Vec3f d1 = A1 - A0, d2 = B1 - B0, r = A0 - B0;
+     float a = d1.dot(d1), e = d2.dot(d2);
+     float f = d2.dot(r);
+     float b = d1.dot(d2), c = d1.dot(r);
+     float denom = a * e - b * b;
+     float s, t;
+     if (denom < 1e-12f) {
+         s = 0.0f;
+         t = clampf(f / std::max(e, 1e-12f), 0.0f, 1.0f);
+     } else {
+         s = clampf((b * f - c * e) / denom, 0.0f, 1.0f);
+         t = clampf((b * s + f) / std::max(e, 1e-12f), 0.0f, 1.0f);
+         // Re-clamp s
+         s = clampf((b * t - c) / std::max(a, 1e-12f), 0.0f, 1.0f);
+     }
+     closestA = A0 + s * d1;
+     closestB = B0 + t * d2;
+ }
+ }  // namespace
+
+ namespace narrowphase {
+
+ // ---- Cylinder vs Plane ----
+ bool collide_cylinder_plane(const CollisionShape& cyl, const Transform& tc,
+                             const CollisionShape& plane,
+                             std::vector<ContactPoint>& contacts) {
+     CylinderAxis ca = cylinder_world_axis(cyl, tc);
+     Vec3f n = plane.plane.normal;
+     float d = plane.plane.offset;
+     float r = cyl.cylinder.radius;
+
+     bool has_contact = false;
+
+     // Test rim points on both disks
+     // Build tangent frame on each disk perpendicular to axis
+     Vec3f perp = std::abs(ca.dir.dot(Vec3f(1, 0, 0))) < 0.9f
+                      ? Vec3f(1, 0, 0)
+                      : Vec3f(0, 1, 0);
+     Vec3f u = ca.dir.cross(perp).normalized();
+     Vec3f v = ca.dir.cross(u).normalized();
+
+     // Sample rim points (8 per disk) + disk centers (2)
+     constexpr int N_RIM = 8;
+     Vec3f disk_centers[2] = {ca.p0, ca.p1};
+     for (int disk = 0; disk < 2; ++disk) {
+         // Test disk center
+         float dist_c = n.dot(disk_centers[disk]) - d;
+         if (dist_c < 0.0f) {
+             ContactPoint cp;
+             cp.normal = n;
+             cp.penetration = -dist_c;
+             cp.position = disk_centers[disk] - n * dist_c;
+             cp.body_a = plane.body_index;
+             cp.body_b = cyl.body_index;
+             cp.friction = combine_friction(cyl.friction, plane.friction);
+             cp.restitution = combine_restitution(cyl.restitution, plane.restitution);
+             contacts.push_back(cp);
+             has_contact = true;
+         }
+
+         // Test rim points
+         for (int i = 0; i < N_RIM; ++i) {
+             float angle = 2.0f * 3.14159265358979323846f * static_cast<float>(i) / N_RIM;
+             Vec3f rim = disk_centers[disk] + r * (std::cos(angle) * u + std::sin(angle) * v);
+             float dist = n.dot(rim) - d;
+             if (dist < 0.0f) {
+                 ContactPoint cp;
+                 cp.normal = n;
+                 cp.penetration = -dist;
+                 cp.position = rim - n * dist;
+                 cp.body_a = plane.body_index;
+                 cp.body_b = cyl.body_index;
+                 cp.friction = combine_friction(cyl.friction, plane.friction);
+                 cp.restitution = combine_restitution(cyl.restitution, plane.restitution);
+                 contacts.push_back(cp);
+                 has_contact = true;
+             }
+         }
+     }
+
+     // Also test the deepest rim point analytically: project n onto disk
+     // plane to find the lowest rim point on each disk
+     for (int disk = 0; disk < 2; ++disk) {
+         Vec3f n_in_disk = n - ca.dir * n.dot(ca.dir);
+         float n_disk_len = n_in_disk.norm();
+         if (n_disk_len > 1e-6f) {
+             Vec3f lowest = disk_centers[disk] - (n_in_disk / n_disk_len) * r;
+             float dist = n.dot(lowest) - d;
+             if (dist < 0.0f) {
+                 ContactPoint cp;
+                 cp.normal = n;
+                 cp.penetration = -dist;
+                 cp.position = lowest - n * dist;
+                 cp.body_a = plane.body_index;
+                 cp.body_b = cyl.body_index;
+                 cp.friction = combine_friction(cyl.friction, plane.friction);
+                 cp.restitution = combine_restitution(cyl.restitution, plane.restitution);
+                 contacts.push_back(cp);
+                 has_contact = true;
+             }
+         }
+     }
+
+     return has_contact;
+ }
+
+ // ---- Cylinder vs Sphere ----
+ bool collide_cylinder_sphere(const CollisionShape& cyl, const Transform& tc,
+                              const CollisionShape& sphere, const Transform& ts,
+                              std::vector<ContactPoint>& contacts) {
+     Transform cw = tc * cyl.local_transform;
+     Transform cw_inv = cw.inverse();
+     Vec3f sphere_center_world = ts.transform_point(sphere.local_transform.position);
+     Vec3f p = cw_inv.transform_point(sphere_center_world);
+     
+     float r = cyl.cylinder.radius;
+     float h = cyl.cylinder.half_length;
+     float sr = sphere.sphere.radius;
+     
+     float dxy = std::sqrt(p.x() * p.x() + p.y() * p.y());
+     
+     bool inside = (dxy <= r && p.z() >= -h && p.z() <= h);
+     Vec3f closest_local;
+     Vec3f normal_local;
+     float pen = 0.0f;
+     
+     if (inside) {
+         // Push out to the closest surface
+         float dist_side = r - dxy;
+         float dist_top = h - p.z();
+         float dist_bot = p.z() + h;
+         
+         if (dist_side < dist_top && dist_side < dist_bot) {
+             if (dxy > 1e-6f) {
+                 closest_local = Vec3f(p.x() / dxy * r, p.y() / dxy * r, p.z());
+                 normal_local = Vec3f(p.x() / dxy, p.y() / dxy, 0.0f);
+             } else {
+                 // On cylinder axis — pick arbitrary radial direction
+                 closest_local = Vec3f(r, 0.0f, p.z());
+                 normal_local = Vec3f(1.0f, 0.0f, 0.0f);
+             }
+             pen = sr + dist_side;
+         } else if (dist_top < dist_bot) {
+             closest_local = Vec3f(p.x(), p.y(), h);
+             normal_local = Vec3f(0.0f, 0.0f, 1.0f);
+             pen = sr + dist_top;
+         } else {
+             closest_local = Vec3f(p.x(), p.y(), -h);
+             normal_local = Vec3f(0.0f, 0.0f, -1.0f);
+             pen = sr + dist_bot;
+         }
+     } else {
+         // Outside: clamp to cylinder surface
+         closest_local.z() = clampf(p.z(), -h, h);
+         if (dxy > r) {
+             closest_local.x() = p.x() / dxy * r;
+             closest_local.y() = p.y() / dxy * r;
+         } else {
+             closest_local.x() = p.x();
+             closest_local.y() = p.y();
+         }
+         
+         Vec3f diff = p - closest_local;
+         float dist = diff.norm();
+         if (dist > sr) return false;
+         
+         if (dist > 1e-6f) {
+             normal_local = diff / dist;
+         } else {
+             normal_local = Vec3f(0, 0, 1); // fallback
+         }
+         pen = sr - dist;
+     }
+     
+     ContactPoint cp;
+     // Normal from A (cylinder) to B (sphere)
+     cp.normal = cw.transform_vector(normal_local).normalized();
+     cp.penetration = pen;
+     cp.position = cw.transform_point(closest_local);
+     cp.body_a = cyl.body_index;
+     cp.body_b = sphere.body_index;
+     cp.friction = combine_friction(cyl.friction, sphere.friction);
+     cp.restitution = combine_restitution(cyl.restitution, sphere.restitution);
+     contacts.push_back(cp);
+     return true;
+ }
+
+ // ---- Cylinder vs Box ----
+ bool collide_cylinder_box(const CollisionShape& cyl, const Transform& tc,
+                           const CollisionShape& box, const Transform& tb,
+                           std::vector<ContactPoint>& contacts) {
+     // Strategy: use GJK-like closest-point approach simplified for cylinder.
+     // Test cylinder axis segment against box, and box corners against cylinder.
+     CylinderAxis ca = cylinder_world_axis(cyl, tc);
+     Transform bw = tb * box.local_transform;
+     Transform bw_inv = bw.inverse();
+     Vec3f half = box.box.half_extents;
+     float cr = cyl.cylinder.radius;
+
+     bool has_contact = false;
+
+     // 1) Test cylinder axis points (endpoints + midpoint) against box
+     Vec3f test_points[3] = {ca.p0, ca.p1, ca.center};
+     for (int i = 0; i < 3; ++i) {
+         // Expand box by cylinder radius and test axis point
+         Vec3f local_pt = bw_inv.transform_point(test_points[i]);
+         Vec3f expanded_half = half + Vec3f(cr, cr, cr);
+
+         if (std::abs(local_pt.x()) <= expanded_half.x() &&
+             std::abs(local_pt.y()) <= expanded_half.y() &&
+             std::abs(local_pt.z()) <= expanded_half.z()) {
+             // Find closest point on actual box surface
+             Vec3f clamped;
+             clamped.x() = clampf(local_pt.x(), -half.x(), half.x());
+             clamped.y() = clampf(local_pt.y(), -half.y(), half.y());
+             clamped.z() = clampf(local_pt.z(), -half.z(), half.z());
+
+             Vec3f world_box_pt = bw.transform_point(clamped);
+             // Closest point on cylinder to this box point
+             Vec3f axis_pt;
+             closest_point_segment(ca.p0, ca.p1, world_box_pt, axis_pt);
+             Vec3f diff = world_box_pt - axis_pt;
+             float dist_to_axis = diff.norm();
+
+             Vec3f cyl_surface;
+             if (dist_to_axis < 1e-6f) {
+                 cyl_surface = axis_pt;
+             } else {
+                 cyl_surface = axis_pt + (diff / dist_to_axis) * std::min(dist_to_axis, cr);
+             }
+
+             Vec3f gap = world_box_pt - cyl_surface;
+             float gap_dist = gap.norm();
+             Vec3f normal;
+             if (gap_dist < 1e-6f) {
+                 // Penetrating - find separation direction
+                 Vec3f face_dist(expanded_half.x() - std::abs(local_pt.x()),
+                                 expanded_half.y() - std::abs(local_pt.y()),
+                                 expanded_half.z() - std::abs(local_pt.z()));
+                 int min_axis = 0;
+                 if (face_dist.y() < face_dist(min_axis)) min_axis = 1;
+                 if (face_dist.z() < face_dist(min_axis)) min_axis = 2;
+                 Vec3f local_normal = Vec3f::Zero();
+                 local_normal(min_axis) = local_pt(min_axis) > 0 ? 1.0f : -1.0f;
+                 normal = bw.transform_vector(local_normal);
+                 float pen = face_dist(min_axis);
+
+                 ContactPoint cp;
+                 cp.normal = normal;
+                 cp.penetration = pen;
+                 cp.position = test_points[i];
+                 cp.body_a = cyl.body_index;
+                 cp.body_b = box.body_index;
+                 cp.friction = combine_friction(cyl.friction, box.friction);
+                 cp.restitution = combine_restitution(cyl.restitution, box.restitution);
+                 contacts.push_back(cp);
+                 has_contact = true;
+             }
+         }
+     }
+
+     // 2) Test box corners against cylinder
+     for (int i = 0; i < 8; ++i) {
+         Vec3f corner(
+             (i & 1) ? half.x() : -half.x(),
+             (i & 2) ? half.y() : -half.y(),
+             (i & 4) ? half.z() : -half.z());
+         Vec3f world_corner = bw.transform_point(corner);
+
+         Vec3f axis_pt;
+         closest_point_segment(ca.p0, ca.p1, world_corner, axis_pt);
+         Vec3f diff = world_corner - axis_pt;
+         float dist = diff.norm();
+
+         if (dist < cr) {
+             Vec3f normal;
+             if (dist < 1e-6f) {
+                 normal = Vec3f(0, 1, 0);
+             } else {
+                 normal = diff / dist;
+             }
+
+             ContactPoint cp;
+             cp.normal = normal;
+             cp.penetration = cr - dist;
+             cp.position = world_corner;
+             cp.body_a = cyl.body_index;
+             cp.body_b = box.body_index;
+             cp.friction = combine_friction(cyl.friction, box.friction);
+             cp.restitution = combine_restitution(cyl.restitution, box.restitution);
+             contacts.push_back(cp);
+             has_contact = true;
+         }
+     }
+
+     return has_contact;
+ }
+
+ // ---- Cylinder vs Cylinder ----
+ bool collide_cylinder_cylinder(const CollisionShape& a, const Transform& ta,
+                                const CollisionShape& b, const Transform& tb,
+                                std::vector<ContactPoint>& contacts) {
+     CylinderAxis ca = cylinder_world_axis(a, ta);
+     CylinderAxis cb = cylinder_world_axis(b, tb);
+     float ra = a.cylinder.radius;
+     float rb = b.cylinder.radius;
+
+     // Find closest approach between axis segments
+     Vec3f closestA, closestB;
+     closest_segments(ca.p0, ca.p1, cb.p0, cb.p1, closestA, closestB);
+
+     Vec3f diff = closestB - closestA;
+     float dist = diff.norm();
+     float radius_sum = ra + rb;
+
+     if (dist > radius_sum) return false;
+
+     Vec3f normal;
+     if (dist < 1e-6f) {
+         // Axes are overlapping - use cross product of axes
+         Vec3f cross = ca.dir.cross(cb.dir);
+         if (cross.norm() > 1e-6f) {
+             normal = cross.normalized();
+         } else {
+             // Parallel - use perpendicular direction
+             Vec3f perp = ca.dir.cross(Vec3f(1, 0, 0));
+             if (perp.norm() < 1e-6f) perp = ca.dir.cross(Vec3f(0, 1, 0));
+             normal = perp.normalized();
+         }
+     } else {
+         normal = diff / dist;
+     }
+
+     ContactPoint cp;
+     cp.normal = normal;
+     cp.penetration = radius_sum - dist;
+     cp.position = closestA + normal * (ra - cp.penetration * 0.5f);
+     cp.body_a = a.body_index;
+     cp.body_b = b.body_index;
+     cp.friction = combine_friction(a.friction, b.friction);
+     cp.restitution = combine_restitution(a.restitution, b.restitution);
+     contacts.push_back(cp);
+     return true;
+ }
+
+ }  // namespace narrowphase
+
  // ---- Collision Dispatcher ----
- /**
-  * @brief Dispatches narrowphase collision routines by shape-type pair.
-  * @param[in] a Shape A.
-  * @param[in] ta World transform of A's parent body.
-  * @param[in] b Shape B.
-  * @param[in] tb World transform of B's parent body.
-  * @param[out] contacts Appended world-space contact manifold entries.
-  * @return `true` if at least one contact is generated.
-  */
  bool collide_shapes(const CollisionShape& a, const Transform& ta,
                      const CollisionShape& b, const Transform& tb,
                      std::vector<ContactPoint>& contacts) {
      ShapeType typeA = a.type;
      ShapeType typeB = b.type;
- 
+
      // Sphere-Sphere
      if (typeA == ShapeType::Sphere && typeB == ShapeType::Sphere) {
          return narrowphase::collide_sphere_sphere(a, ta, b, tb, contacts);
@@ -430,8 +803,43 @@
      if (typeA == ShapeType::Box && typeB == ShapeType::Box) {
          return narrowphase::collide_box_box(a, ta, b, tb, contacts);
      }
+     // Cylinder-Plane
+     if (typeA == ShapeType::Cylinder && typeB == ShapeType::Plane) {
+         return narrowphase::collide_cylinder_plane(a, ta, b, contacts);
+     }
+     if (typeA == ShapeType::Plane && typeB == ShapeType::Cylinder) {
+         return narrowphase::collide_cylinder_plane(b, tb, a, contacts);
+     }
+     // Cylinder-Sphere
+     if (typeA == ShapeType::Cylinder && typeB == ShapeType::Sphere) {
+         return narrowphase::collide_cylinder_sphere(a, ta, b, tb, contacts);
+     }
+     if (typeA == ShapeType::Sphere && typeB == ShapeType::Cylinder) {
+         bool r = narrowphase::collide_cylinder_sphere(b, tb, a, ta, contacts);
+         for (auto& cp : contacts) {
+             cp.normal = -cp.normal;
+             std::swap(cp.body_a, cp.body_b);
+         }
+         return r;
+     }
+     // Cylinder-Box
+     if (typeA == ShapeType::Cylinder && typeB == ShapeType::Box) {
+         return narrowphase::collide_cylinder_box(a, ta, b, tb, contacts);
+     }
+     if (typeA == ShapeType::Box && typeB == ShapeType::Cylinder) {
+         bool r = narrowphase::collide_cylinder_box(b, tb, a, ta, contacts);
+         for (auto& cp : contacts) {
+             cp.normal = -cp.normal;
+             std::swap(cp.body_a, cp.body_b);
+         }
+         return r;
+     }
+     // Cylinder-Cylinder
+     if (typeA == ShapeType::Cylinder && typeB == ShapeType::Cylinder) {
+         return narrowphase::collide_cylinder_cylinder(a, ta, b, tb, contacts);
+     }
      // Plane-Plane: no collision
      return false;
  }
- 
+
  }  // namespace novaphy

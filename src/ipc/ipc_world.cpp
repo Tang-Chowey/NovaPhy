@@ -264,6 +264,10 @@ void IPCWorld::Impl::convert_bodies() {
                 case ShapeType::Sphere:
                     tet_data = sphere_to_tetmesh(shape.sphere.radius, 1);
                     break;
+                case ShapeType::Cylinder:
+                    tet_data = cylinder_to_tetmesh(shape.cylinder.radius,
+                                                   shape.cylinder.half_length);
+                    break;
                 default:
                     continue;  // skip unknown types
             }

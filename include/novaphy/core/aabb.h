@@ -144,6 +144,29 @@ struct AABB {
         }
         return result;
     }
+
+    /**
+     * @brief Create AABB enclosing an oriented cylinder (Z-aligned locally).
+     *
+     * @param [in] radius Cylinder radius in meters.
+     * @param [in] half_length Half-length along local Z axis in meters.
+     * @param [in] t Cylinder world transform.
+     * @return World-space AABB bounding the oriented cylinder.
+     */
+    static AABB from_oriented_cylinder(float radius, float half_length,
+                                        const Transform& t) {
+        Mat3f R = t.rotation.normalized().toRotationMatrix();
+        Vec3f axis = R.col(2);  // local Z in world
+        // Project radius onto each world axis: for axis i, the disk
+        // contributes sqrt(R(i,0)^2 + R(i,1)^2) * radius
+        Vec3f extent;
+        for (int i = 0; i < 3; ++i) {
+            float disk_proj = std::sqrt(R(i, 0) * R(i, 0) + R(i, 1) * R(i, 1)) * radius;
+            float axis_proj = std::abs(axis(i)) * half_length;
+            extent(i) = disk_proj + axis_proj;
+        }
+        return AABB(t.position - extent, t.position + extent);
+    }
 };
 
 }  // namespace novaphy

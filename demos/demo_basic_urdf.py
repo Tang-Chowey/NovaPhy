@@ -15,6 +15,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import novaphy
 
+try:
+    import polyscope as ps
+    import polyscope.imgui as psim
+    HAS_POLYSCOPE = True
+except ImportError:
+    ps = None
+    psim = None
+    HAS_POLYSCOPE = False
+
+from novaphy.viz import make_box_mesh, make_sphere_mesh, make_cylinder_mesh, make_ground_plane_mesh, quat_to_rotation_matrix
+
 
 DEFAULT_STANDING_POSE: Dict[str, float] = {
     "LF_HAA": 0.2,
@@ -40,10 +51,12 @@ class DemoConfig:
     frames: int = 400
     solver_substeps: int = 10
     solver_iterations: int = 6
-    root_height: float = 0.7
+    root_height: float = 0.45
     gravity_z: float = -9.81
     drive_stiffness: float = 2000.0
     drive_damping: float = 1.0
+    gui: bool = False
+    steps_per_frame: int = 2
 
     @property
     def dt(self) -> float:
@@ -180,6 +193,135 @@ def run_demo(config: DemoConfig) -> Dict[str, str]:
     }
 
 
+def run_gui(config: DemoConfig) -> None:
+    """Run the URDF demo with interactive Polyscope visualization."""
+    if not HAS_POLYSCOPE:
+        raise ImportError(
+            "polyscope is required for GUI mode. Install with: pip install polyscope"
+        )
+
+    scene, world = build_world(config)
+    articulation = scene.articulation
+    model = scene.model
+
+    # --- Polyscope init ---
+    ps.init()
+    ps.set_program_name("NovaPhy - Basic URDF Quadruped")
+    ps.set_up_dir("z_up")
+    ps.set_ground_plane_mode("tile_reflection")
+    ps.look_at((3.0, 3.0, 2.0), (0.0, 0.0, 0.4))
+
+    # --- Build mesh data for each collision shape ---
+    # Each entry: (name, local_verts, faces, body_index, shape_local_transform)
+    shape_meshes = []
+
+    for i, shape in enumerate(model.shapes):
+        stype = shape.type.name
+        name = f"shape_{i}"
+
+        if stype == "Box":
+            he = np.array(shape.box_half_extents, dtype=np.float32)
+            verts, faces = make_box_mesh(he)
+            shape_meshes.append((name, verts, faces, shape.body_index, shape.local_transform))
+        elif stype == "Sphere":
+            verts, faces = make_sphere_mesh(shape.sphere_radius)
+            shape_meshes.append((name, verts, faces, shape.body_index, shape.local_transform))
+        elif stype == "Cylinder":
+            verts, faces = make_cylinder_mesh(shape.cylinder_radius, shape.cylinder_half_length)
+            shape_meshes.append((name, verts, faces, shape.body_index, shape.local_transform))
+        elif stype == "Plane":
+            verts, faces = make_ground_plane_mesh(50.0, shape.plane_offset, up="z")
+            gm = ps.register_surface_mesh(name, verts, faces)
+            gm.set_color((0.55, 0.55, 0.55))
+            gm.set_edge_width(0.5)
+            # Ground doesn't need transform updates
+
+    # Assign pleasant colors to link shapes
+    body_colors = [
+        (0.20, 0.55, 0.85),  # blue
+        (0.85, 0.45, 0.20),  # orange
+        (0.30, 0.75, 0.45),  # green
+        (0.75, 0.30, 0.60),  # magenta
+        (0.50, 0.70, 0.20),  # lime
+        (0.90, 0.65, 0.15),  # gold
+        (0.35, 0.55, 0.75),  # steel blue
+        (0.70, 0.35, 0.35),  # rust
+    ]
+
+    def update_meshes():
+        """Use FK to get link transforms and update Polyscope meshes."""
+        q_vec = np.array(world.q, dtype=np.float32)
+        transforms = novaphy.forward_kinematics(articulation, q_vec)
+
+        for name, local_verts, faces, body_idx, shape_local_tf in shape_meshes:
+            if body_idx < 0 or body_idx >= len(transforms):
+                continue
+            # Compose: world_tf = link_transform * shape_local_transform
+            link_tf = transforms[body_idx]
+            world_tf = link_tf * shape_local_tf
+            pos = np.array(world_tf.position, dtype=np.float32)
+            rot = quat_to_rotation_matrix(
+                np.array(world_tf.rotation, dtype=np.float32)
+            )
+            world_verts = (local_verts @ rot.T) + pos
+
+            if ps.has_surface_mesh(name):
+                ps.get_surface_mesh(name).update_vertex_positions(world_verts)
+            else:
+                sm = ps.register_surface_mesh(name, world_verts, faces)
+                color = body_colors[body_idx % len(body_colors)]
+                sm.set_color(color)
+                sm.set_smooth_shade(True)
+
+    # Initial render
+    update_meshes()
+
+    # --- GUI state ---
+    gui_state = {
+        "paused": False,
+        "step_once": False,
+        "frame": 0,
+    }
+
+    def callback():
+        # --- ImGui controls ---
+        _, gui_state["paused"] = psim.Checkbox("Paused", gui_state["paused"])
+        psim.SameLine()
+        if psim.Button("Step"):
+            gui_state["step_once"] = True
+        psim.SameLine()
+        if psim.Button("Reset"):
+            # Rebuild the world from scratch
+            nonlocal scene, world, articulation, model
+            scene, world = build_world(config)
+            articulation = scene.articulation
+            model = scene.model
+            gui_state["frame"] = 0
+
+        root_z = _root_height(scene, world)
+        psim.TextUnformatted(f"Frame: {gui_state['frame']}")
+        psim.TextUnformatted(f"Root height: {root_z:.4f} m")
+
+        # Show joint positions
+        if psim.TreeNode("Joint Positions"):
+            for jname in world.joint_names:
+                val = world.joint_positions.get(jname, 0.0)
+                psim.TextUnformatted(f"  {jname}: {val:.4f} rad")
+            psim.TreePop()
+
+        # --- Step simulation ---
+        if not gui_state["paused"] or gui_state["step_once"]:
+            for _ in range(config.steps_per_frame):
+                world.step(config.dt)
+                gui_state["frame"] += 1
+            gui_state["step_once"] = False
+
+        update_meshes()
+
+    ps.set_user_callback(callback)
+    ps.show()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser("NovaPhy Newton-style basic URDF demo")
     parser.add_argument("--urdf", type=str, default=None)
@@ -189,6 +331,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--root-height", type=float, default=None)
     parser.add_argument("--solver-substeps", type=int, default=None)
     parser.add_argument("--solver-iterations", type=int, default=None)
+    parser.add_argument("--gui", action="store_true", help="Run with Polyscope GUI")
     return parser.parse_args()
 
 
@@ -208,14 +351,19 @@ def build_config_from_args(args: argparse.Namespace) -> DemoConfig:
         config.solver_substeps = args.solver_substeps
     if args.solver_iterations is not None:
         config.solver_iterations = args.solver_iterations
+    if args.gui:
+        config.gui = True
     return config
 
 
 def main() -> None:
     args = parse_args()
     config = build_config_from_args(args)
-    outputs = run_demo(config)
-    print(json.dumps(outputs, indent=2))
+    if config.gui:
+        run_gui(config)
+    else:
+        outputs = run_demo(config)
+        print(json.dumps(outputs, indent=2))
 
 
 if __name__ == "__main__":

@@ -112,23 +112,88 @@ def make_sphere_mesh(radius, n_lat=16, n_lon=32):
     return verts, faces
 
 
-def make_ground_plane_mesh(size=20.0, y=0.0):
+def make_cylinder_mesh(radius, half_length, n_segments=32):
+    """Generate a cylinder mesh aligned along the local Z axis.
+
+    Args:
+        radius (float): Cylinder radius in meters.
+        half_length (float): Half-length along Z axis in meters.
+        n_segments (int): Radial segments.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: Vertices `(N, 3)` and triangular faces
+        `(M, 3)`.
+    """
+    verts = []
+    faces = []
+
+    # Bottom cap center
+    verts.append([0, 0, -half_length])
+    bottom_center = 0
+
+    # Top cap center
+    verts.append([0, 0, half_length])
+    top_center = 1
+
+    # Bottom rim vertices (offset 2)
+    for i in range(n_segments):
+        theta = 2 * np.pi * i / n_segments
+        verts.append([radius * np.cos(theta), radius * np.sin(theta), -half_length])
+
+    # Top rim vertices (offset 2 + n_segments)
+    top_offset = 2 + n_segments
+    for i in range(n_segments):
+        theta = 2 * np.pi * i / n_segments
+        verts.append([radius * np.cos(theta), radius * np.sin(theta), half_length])
+
+    verts = np.array(verts, dtype=np.float32)
+
+    # Faces
+    for i in range(n_segments):
+        i_next = (i + 1) % n_segments
+        b_curr = 2 + i
+        b_next = 2 + i_next
+        t_curr = top_offset + i
+        t_next = top_offset + i_next
+
+        # Bottom cap
+        faces.append([bottom_center, b_next, b_curr])
+        # Top cap
+        faces.append([top_center, t_curr, t_next])
+        # Side wall (two triangles)
+        faces.append([b_curr, b_next, t_next])
+        faces.append([b_curr, t_next, t_curr])
+
+    faces = np.array(faces, dtype=np.int32)
+    return verts, faces
+
+
+def make_ground_plane_mesh(size=20.0, offset=0.0, up="y"):
     """Generate a flat ground plane mesh.
 
     Args:
         size (float): Half-size of the rendered square plane in meters.
-        y (float): Plane height in world Y (meters).
+        offset (float): Plane height along the up axis (meters).
+        up (str): Up-axis convention, ``"y"`` or ``"z"``.
 
     Returns:
         tuple[np.ndarray, np.ndarray]: Vertices `(4, 3)` and triangular faces
         `(2, 3)`.
     """
-    verts = np.array([
-        [-size, y, -size],
-        [+size, y, -size],
-        [+size, y, +size],
-        [-size, y, +size],
-    ], dtype=np.float32)
+    if up == "z":
+        verts = np.array([
+            [-size, -size, offset],
+            [+size, -size, offset],
+            [+size, +size, offset],
+            [-size, +size, offset],
+        ], dtype=np.float32)
+    else:
+        verts = np.array([
+            [-size, offset, -size],
+            [+size, offset, -size],
+            [+size, offset, +size],
+            [-size, offset, +size],
+        ], dtype=np.float32)
     faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
     return verts, faces
 
@@ -300,6 +365,9 @@ class GeneralBatchedVisualizer:
         if stype == "Sphere":
             return make_sphere_mesh(shape.sphere_radius,
                                     n_lat=self._sphere_lat, n_lon=self._sphere_lon)
+        if stype == "Cylinder":
+            return make_cylinder_mesh(shape.cylinder_radius, shape.cylinder_half_length,
+                                      n_segments=self._sphere_lon)
         return None
 
     def _setup(self, ground_size):
@@ -421,6 +489,10 @@ class SceneVisualizer:
 
             elif shape.type.name == "Sphere":
                 verts, faces = make_sphere_mesh(shape.sphere_radius)
+                self.meshes.append((name, verts, faces, shape.body_index))
+
+            elif shape.type.name == "Cylinder":
+                verts, faces = make_cylinder_mesh(shape.cylinder_radius, shape.cylinder_half_length)
                 self.meshes.append((name, verts, faces, shape.body_index))
 
             elif shape.type.name == "Plane":

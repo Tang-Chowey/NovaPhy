@@ -132,7 +132,7 @@ def run_polyscope(world, spacing, rigid_meshes, dt=1.0/120.0):
     ps.look_at((1.2, 0.8, 1.2), (0.25, 0.15, 0.25))
 
     # --- Ground plane ---
-    ground_v, ground_f = make_ground_plane_mesh(size=2.0, y=0.0)
+    ground_v, ground_f = make_ground_plane_mesh(size=2.0, offset=0.0)
     ground_mesh = ps.register_surface_mesh("ground", ground_v, ground_f)
     ground_mesh.set_color((0.75, 0.75, 0.72))
     ground_mesh.set_transparency(0.5)

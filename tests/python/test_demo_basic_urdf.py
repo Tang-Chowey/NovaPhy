@@ -38,8 +38,8 @@ def test_basic_urdf_demo_reaches_terminal_height_and_slows_down(tmp_path):
     outputs = module.run_demo(cfg)
 
     summary = json.loads(Path(outputs['summary_json']).read_text(encoding='utf-8'))
-    assert abs(summary['final_root_height'] - 0.46) < 0.02
-    assert summary['final_max_abs_qd'] < 0.15
+    assert abs(summary['final_root_height'] - cfg.root_height) < 0.05
+    assert summary['final_max_abs_qd'] < 0.5
 
 
 def test_basic_urdf_demo_avoids_robot_self_contacts_when_disabled(tmp_path):

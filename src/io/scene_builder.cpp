@@ -1,4 +1,4 @@
-﻿#include "novaphy/io/scene_builder.h"
+#include "novaphy/io/scene_builder.h"
 
 #include <algorithm>
 #include <cmath>
@@ -160,10 +160,9 @@ int add_collision_shape_from_urdf(const UrdfCollision& collision,
     if (collision.geometry.type == UrdfGeometryType::Cylinder) {
         const float r = collision.geometry.radius;
         const float half_l = collision.geometry.length * 0.5f;
-        const int shape_idx = builder.add_shape(CollisionShape::make_box(
-            Vec3f(r, r, half_l), body_idx, local_transform,
+        const int shape_idx = builder.add_shape(CollisionShape::make_cylinder(
+            r, half_l, body_idx, local_transform,
             collision.friction, collision.restitution));
-        warnings.push_back("Cylinder collision approximated as box.");
         return shape_idx;
     }
     if (collision.geometry.type == UrdfGeometryType::Mesh) {

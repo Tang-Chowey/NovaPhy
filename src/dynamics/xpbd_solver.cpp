@@ -1,4 +1,4 @@
-﻿#include "novaphy/dynamics/xpbd_solver.h"
+#include "novaphy/dynamics/xpbd_solver.h"
 
 #include <algorithm>
 #include <cmath>
@@ -391,10 +391,9 @@ int XPBDSolver::apply_contact_correction(const Articulation& model,
         q(qi + 0) += correction * normal.x();
         q(qi + 1) += correction * normal.y();
         q(qi + 2) += correction * normal.z();
-        qd(qdi + 3) += (correction * normal.x()) / std::max(dt, 1.0e-6f);
-        qd(qdi + 4) += (correction * normal.y()) / std::max(dt, 1.0e-6f);
-        qd(qdi + 5) += (correction * normal.z()) / std::max(dt, 1.0e-6f);
 
+        // Zero out approaching root velocity along contact normal without
+        // injecting artificial separation velocity.
         Vec3f linear_velocity(qd(qdi + 3), qd(qdi + 4), qd(qdi + 5));
         const float normal_velocity = linear_velocity.dot(normal);
         if (normal_velocity < 0.0f) {

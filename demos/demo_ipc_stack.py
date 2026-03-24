@@ -83,7 +83,7 @@ def run_gui(world, model, half, num_boxes):
     ps.set_ground_plane_mode("shadow_only")
 
     # Register ground plane mesh
-    gnd_v, gnd_f = make_ground_plane_mesh(size=10.0, y=0.0)
+    gnd_v, gnd_f = make_ground_plane_mesh(size=10.0, offset=0.0)
     gnd_mesh = ps.register_surface_mesh("ground", gnd_v, gnd_f)
     gnd_mesh.set_color((0.6, 0.6, 0.6))
     gnd_mesh.set_transparency(0.5)

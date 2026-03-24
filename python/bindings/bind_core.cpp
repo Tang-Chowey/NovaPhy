@@ -1,4 +1,4 @@
-﻿#include <pybind11/eigen.h>
+#include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -23,6 +23,9 @@ void bind_core(py::module_& m) {
         )pbdoc")
         .value("Plane", ShapeType::Plane, R"pbdoc(
             Infinite plane primitive.
+        )pbdoc")
+        .value("Cylinder", ShapeType::Cylinder, R"pbdoc(
+            Cylinder primitive aligned along local Z axis.
         )pbdoc");
 
     // --- RigidBody ---
@@ -216,6 +219,18 @@ void bind_core(py::module_& m) {
             R"pbdoc(
                 float: Plane offset in meters along normal direction.
             )pbdoc")
+        .def_property("cylinder_radius",
+            [](const CollisionShape& s) { return s.cylinder.radius; },
+            [](CollisionShape& s, float r) { s.cylinder.radius = r; },
+            R"pbdoc(
+                float: Cylinder radius in meters.
+            )pbdoc")
+        .def_property("cylinder_half_length",
+            [](const CollisionShape& s) { return s.cylinder.half_length; },
+            [](CollisionShape& s, float h) { s.cylinder.half_length = h; },
+            R"pbdoc(
+                float: Cylinder half-length along local Z axis in meters.
+            )pbdoc")
         .def_static("make_box", &CollisionShape::make_box,
                      py::arg("half_extents"), py::arg("body_idx"),
                      py::arg("local") = Transform::identity(),
@@ -264,6 +279,24 @@ void bind_core(py::module_& m) {
 
                          Returns:
                              CollisionShape: Plane shape descriptor.
+                     )pbdoc")
+        .def_static("make_cylinder", &CollisionShape::make_cylinder,
+                     py::arg("radius"), py::arg("half_length"), py::arg("body_idx"),
+                     py::arg("local") = Transform::identity(),
+                     py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
+                     R"pbdoc(
+                         Creates a cylinder collision shape aligned along local Z.
+
+                         Args:
+                             radius (float): Cylinder radius in meters.
+                             half_length (float): Half-length along local Z axis in meters.
+                             body_idx (int): Owning body index.
+                             local (Transform): Local shape pose in body frame.
+                             friction (float): Friction coefficient.
+                             restitution (float): Restitution coefficient.
+
+                         Returns:
+                             CollisionShape: Cylinder shape descriptor.
                      )pbdoc")
         .def("compute_aabb", &CollisionShape::compute_aabb, py::arg("body_transform"), R"pbdoc(
             Computes world-space AABB for the shape.

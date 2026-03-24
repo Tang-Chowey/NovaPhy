@@ -80,6 +80,34 @@ bool collide_box_box(const CollisionShape& a, const Transform& ta,
                      const CollisionShape& b, const Transform& tb,
                      std::vector<ContactPoint>& contacts);
 
+/**
+ * @brief Detect and generate contacts for cylinder-plane intersection.
+ */
+bool collide_cylinder_plane(const CollisionShape& cylinder, const Transform& tc,
+                            const CollisionShape& plane,
+                            std::vector<ContactPoint>& contacts);
+
+/**
+ * @brief Detect and generate contacts for cylinder-sphere intersection.
+ */
+bool collide_cylinder_sphere(const CollisionShape& cylinder, const Transform& tc,
+                             const CollisionShape& sphere, const Transform& ts,
+                             std::vector<ContactPoint>& contacts);
+
+/**
+ * @brief Detect and generate contacts for cylinder-box intersection.
+ */
+bool collide_cylinder_box(const CollisionShape& cylinder, const Transform& tc,
+                          const CollisionShape& box, const Transform& tb,
+                          std::vector<ContactPoint>& contacts);
+
+/**
+ * @brief Detect and generate contacts for cylinder-cylinder intersection.
+ */
+bool collide_cylinder_cylinder(const CollisionShape& a, const Transform& ta,
+                               const CollisionShape& b, const Transform& tb,
+                               std::vector<ContactPoint>& contacts);
+
 }  // namespace narrowphase
 
 /**

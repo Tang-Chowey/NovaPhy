@@ -40,4 +40,16 @@ TetMeshData box_to_tetmesh(const Vec3f& half_extents);
  */
 TetMeshData sphere_to_tetmesh(float radius, int subdivisions = 1);
 
+/**
+ * @brief Convert a cylinder to a tetrahedral mesh.
+ *
+ * Creates a prism-like mesh with top/bottom disk fans and lateral tets.
+ *
+ * @param radius    Cylinder radius in meters.
+ * @param half_length Half-length along the local Z axis.
+ * @param n_segments Number of radial segments around the circumference.
+ * @return Tet mesh representation.
+ */
+TetMeshData cylinder_to_tetmesh(float radius, float half_length, int n_segments = 16);
+
 }  // namespace novaphy

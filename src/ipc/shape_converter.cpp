@@ -120,4 +120,70 @@ TetMeshData sphere_to_tetmesh(float radius, int subdivisions) {
     return mesh;
 }
 
+TetMeshData cylinder_to_tetmesh(float radius, float half_length, int n_segments) {
+    TetMeshData mesh;
+    const double r = static_cast<double>(radius);
+    const double h = static_cast<double>(half_length);
+    const double pi2 = 2.0 * 3.14159265358979323846;
+
+    // Vertex layout:
+    //   0              = bottom center (0, 0, -h)
+    //   1              = top center    (0, 0, +h)
+    //   2 .. n+1       = bottom ring
+    //   n+2 .. 2n+1    = top ring
+    const int n = n_segments;
+
+    mesh.vertices.reserve(2 + 2 * n);
+    mesh.vertices.push_back({0.0, 0.0, -h});  // 0: bottom center
+    mesh.vertices.push_back({0.0, 0.0,  h});  // 1: top center
+
+    for (int i = 0; i < n; ++i) {
+        double angle = pi2 * static_cast<double>(i) / static_cast<double>(n);
+        double cx = r * std::cos(angle);
+        double cy = r * std::sin(angle);
+        mesh.vertices.push_back({cx, cy, -h});  // bottom ring: index 2+i
+        mesh.vertices.push_back({cx, cy,  h});   // top ring:    index 2+n+i
+    }
+    // Fix layout: bottom ring at [2..n+1], top ring at [n+2..2n+1]
+    // Re-do with correct indexing:
+    mesh.vertices.clear();
+    mesh.vertices.push_back({0.0, 0.0, -h});  // 0
+    mesh.vertices.push_back({0.0, 0.0,  h});  // 1
+    for (int i = 0; i < n; ++i) {
+        double angle = pi2 * static_cast<double>(i) / static_cast<double>(n);
+        double cx = r * std::cos(angle);
+        double cy = r * std::sin(angle);
+        mesh.vertices.push_back({cx, cy, -h});  // 2+i
+    }
+    for (int i = 0; i < n; ++i) {
+        double angle = pi2 * static_cast<double>(i) / static_cast<double>(n);
+        double cx = r * std::cos(angle);
+        double cy = r * std::sin(angle);
+        mesh.vertices.push_back({cx, cy,  h});  // n+2+i
+    }
+
+    // Bottom fan: center(0), ring[i], ring[i+1]
+    // Top fan:    center(1), ring[i+1], ring[i]  (opposite winding)
+    // Lateral:    two tets per quad segment connecting bottom and top rings
+    mesh.tetrahedra.reserve(4 * n);
+
+    auto bot = [&](int i) { return 2 + (i % n); };
+    auto top = [&](int i) { return 2 + n + (i % n); };
+
+    for (int i = 0; i < n; ++i) {
+        int b0 = bot(i), b1 = bot(i + 1);
+        int t0 = top(i), t1 = top(i + 1);
+
+        // Bottom fan tet: center_bot, b0, b1, t0
+        mesh.tetrahedra.push_back({0, b0, b1, t0});
+        // Top fan tet: center_top, t1, t0, b1
+        mesh.tetrahedra.push_back({1, t1, t0, b1});
+        // Lateral connecting tet
+        mesh.tetrahedra.push_back({b1, t0, t1, 0});
+        mesh.tetrahedra.push_back({b0, t0, b1, 1});
+    }
+
+    return mesh;
+}
+
 }  // namespace novaphy
