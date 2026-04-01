@@ -268,7 +268,7 @@ def _handle_ui_input(state, gizmo_verts, gizmo_faces, imgui_mod, imgui_space_key
         state["target_pos"] = _as_vec3_f64(t_ps, name="gizmo_transform_translation")
 
 
-def _update_ik_goal(state, art, ee_link_index, joint_limits):
+def _update_ik_goal(state, art, ee_link_index, joint_limits, ik_max_iter: int):
     """Re-solve IK on a timer while playing, with hysteresis to avoid solution hopping.
 
     When the EE is already close to the IK goal and the user barely moves the target,
@@ -304,7 +304,7 @@ def _update_ik_goal(state, art, ee_link_index, joint_limits):
         p_ik,
         joint_limits=joint_limits,
         ee_link_index=ee_link_index,
-        max_iter=IK_MAX_ITER,
+        max_iter=int(ik_max_iter),
         prefer_q=state["q_display"],
     )
     state["last_ik_target_pos"] = _as_vec3_f64(state["target_pos"], name="target_pos").copy()
@@ -380,6 +380,7 @@ def _make_polyscope_frame_callback(
     art,
     ee_link_index,
     joint_limits,
+    ik_max_iter,
     gizmo_verts,
     gizmo_faces,
     visual_parts,
@@ -398,7 +399,7 @@ def _make_polyscope_frame_callback(
             imgui_space_key=imgui_space_key,
             imgui_keypress_available=imgui_keypress_available,
         )
-        _update_ik_goal(state, art, ee_link_index, joint_limits)
+        _update_ik_goal(state, art, ee_link_index, joint_limits, ik_max_iter=ik_max_iter)
         if state["playing"]:
             a = float(np.clip(state["smooth_alpha"], 0.0, 1.0))
             state["q_display"] = (
@@ -421,6 +422,7 @@ def run_runtime(
     """Run the IK runtime in one unified implementation."""
     if headless or not HAS_POLYSCOPE:
         return _run_headless_ik_once(max_iter=max_iter, target_pos=target_pos, q_seed=q_seed)
+    ik_max_iter = IK_MAX_ITER if max_iter is None else int(max_iter)
 
     ps.init()
     ps.set_program_name("NovaPhy - FR3 IK (position target)")
@@ -456,7 +458,7 @@ def run_runtime(
         p_ik0,
         joint_limits=joint_limits,
         ee_link_index=ee_link_index,
-        max_iter=IK_MAX_ITER,
+        max_iter=ik_max_iter,
         prefer_q=q_display,
     )
 
@@ -480,6 +482,7 @@ def run_runtime(
         art,
         ee_link_index,
         joint_limits,
+        ik_max_iter,
         gizmo_verts,
         gizmo_faces,
         visual_parts,
