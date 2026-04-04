@@ -1,11 +1,19 @@
-﻿#include <pybind11/pybind11.h>
+#include <memory>
+#include <optional>
+
+#include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 
+#include "novaphy/core/control.h"
+#include "novaphy/core/device.h"
 #include "novaphy/core/model.h"
 #include "novaphy/core/model_builder.h"
-#include "novaphy/sim/articulated_world.h"
+#include "novaphy/dynamics/solver_base.h"
+#include "novaphy/dynamics/solver_sequential_impulse.h"
+#include "novaphy/dynamics/xpbd_solver.h"
+#include "novaphy/fluid/pbf_solver.h"
 #include "novaphy/sim/state.h"
 #include "novaphy/sim/world.h"
 
@@ -13,6 +21,59 @@ namespace py = pybind11;
 using namespace novaphy;
 
 void bind_sim(py::module_& m) {
+    // --- DeviceType enum ---
+    py::enum_<DeviceType>(m, "DeviceType", R"pbdoc(
+        Compute backend type for simulation.
+    )pbdoc")
+        .value("CPU", DeviceType::CPU)
+        .value("CUDA", DeviceType::CUDA)
+        .value("Vulkan", DeviceType::Vulkan)
+        .value("Metal", DeviceType::Metal);
+
+    // --- Device ---
+    py::class_<Device>(m, "Device", R"pbdoc(
+        Lightweight device descriptor for compute backend selection.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("type", &Device::type)
+        .def_readwrite("ordinal", &Device::ordinal)
+        .def_static("cpu", &Device::cpu)
+        .def_static("cuda", &Device::cuda, py::arg("ordinal") = 0)
+        .def("__eq__", &Device::operator==)
+        .def("__ne__", &Device::operator!=);
+
+    // --- JointTargetMode enum ---
+    py::enum_<JointTargetMode>(m, "JointTargetMode", R"pbdoc(
+        Joint drive target mode.
+    )pbdoc")
+        .value("Off", JointTargetMode::Off)
+        .value("TargetPosition", JointTargetMode::TargetPosition)
+        .value("TargetVelocity", JointTargetMode::TargetVelocity);
+
+    // --- JointDrive ---
+    py::class_<JointDrive>(m, "JointDrive", R"pbdoc(
+        Per-joint PD drive configuration.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("mode", &JointDrive::mode)
+        .def_readwrite("target_position", &JointDrive::target_position)
+        .def_readwrite("target_velocity", &JointDrive::target_velocity)
+        .def_readwrite("stiffness", &JointDrive::stiffness)
+        .def_readwrite("damping", &JointDrive::damping)
+        .def_readwrite("force_limit", &JointDrive::force_limit);
+
+    // --- Control ---
+    py::class_<Control>(m, "Control", R"pbdoc(
+        Unified runtime control input for one simulation step.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("joint_forces", &Control::joint_forces)
+        .def_readwrite("articulation_joint_forces", &Control::articulation_joint_forces)
+        .def_readwrite("joint_drives", &Control::joint_drives)
+        .def_readwrite("body_forces", &Control::body_forces)
+        .def_readwrite("body_torques", &Control::body_torques);
+
+
     py::class_<CollisionFilterPair>(m, "CollisionFilterPair", R"pbdoc(
         Disabled collision pair stored in shape-index space.
     )pbdoc")
@@ -26,19 +87,25 @@ void bind_sim(py::module_& m) {
         .def(py::init<>(), R"pbdoc(
             Creates an empty model builder.
         )pbdoc")
-        .def("add_body", &ModelBuilder::add_body,
-             py::arg("body"),
-             py::arg("transform") = Transform::identity(),
-             R"pbdoc(
-                 Adds a rigid body and returns its index.
+        .def(
+            "add_body",
+            [](ModelBuilder& self, const RigidBody& body, py::object transform) {
+                Transform t =
+                    transform.is_none() ? Transform::identity() : transform.cast<Transform>();
+                return self.add_body(body, t);
+            },
+            py::arg("body"),
+            py::arg("transform") = py::none(),
+            R"pbdoc(
+                Adds a rigid body and returns its index.
 
-                 Args:
-                     body (RigidBody): Body mass and inertia properties.
-                     transform (Transform): Initial world transform.
+                Args:
+                    body (RigidBody): Body mass and inertia properties.
+                    transform (Transform): Initial world transform.
 
-                 Returns:
-                     int: New body index.
-             )pbdoc")
+                Returns:
+                    int: New body index.
+            )pbdoc")
         .def("add_shape", &ModelBuilder::add_shape,
              py::arg("shape"),
              R"pbdoc(
@@ -59,11 +126,127 @@ void bind_sim(py::module_& m) {
 
                  Args:
                      y (float): Plane offset along +Y world axis in meters.
-                     friction (float): Friction coefficient used by contact solver.
-                     restitution (float): Restitution coefficient in [0, 1].
+                     friction (float): Friction coefficient.
+                     restitution (float): Restitution coefficient.
 
                  Returns:
                      int: New shape index.
+             )pbdoc")
+        .def(
+            "add_shape_box",
+            [](ModelBuilder& self, const Vec3f& half_extents, py::object transform, float density,
+               float friction, float restitution, bool is_static) {
+                Transform t =
+                    transform.is_none() ? Transform::identity() : transform.cast<Transform>();
+                return self.add_shape_box(half_extents, t, density, friction, restitution,
+                                           is_static);
+            },
+            py::arg("half_extents"),
+            py::arg("transform") = py::none(),
+            py::arg("density") = 1000.0f,
+            py::arg("friction") = 0.5f,
+            py::arg("restitution") = 0.3f,
+            py::arg("is_static") = false,
+            R"pbdoc(
+                Adds a box body+shape in one call with density-based mass.
+
+                Args:
+                    half_extents (Vector3): Box half extents in meters.
+                    transform (Transform): Initial world transform.
+                    density (float): Mass density in kg/m^3.
+                    friction (float): Friction coefficient.
+                    restitution (float): Restitution coefficient.
+                    is_static (bool): If True, body is immovable.
+
+                Returns:
+                    int: New body index.
+            )pbdoc")
+        .def(
+            "add_shape_sphere",
+            [](ModelBuilder& self, float radius, py::object transform, float density, float friction,
+               float restitution, bool is_static) {
+                Transform t =
+                    transform.is_none() ? Transform::identity() : transform.cast<Transform>();
+                return self.add_shape_sphere(radius, t, density, friction, restitution, is_static);
+            },
+            py::arg("radius"),
+            py::arg("transform") = py::none(),
+            py::arg("density") = 1000.0f,
+            py::arg("friction") = 0.5f,
+            py::arg("restitution") = 0.3f,
+            py::arg("is_static") = false,
+            R"pbdoc(
+                Adds a sphere body+shape in one call with density-based mass.
+
+                Args:
+                    radius (float): Sphere radius in meters.
+                    transform (Transform): Initial world transform.
+                    density (float): Mass density in kg/m^3.
+                    friction (float): Friction coefficient.
+                    restitution (float): Restitution coefficient.
+                    is_static (bool): If True, body is immovable.
+
+                Returns:
+                    int: New body index.
+            )pbdoc")
+        .def(
+            "add_shape_cylinder",
+            [](ModelBuilder& self, float radius, float half_length, py::object transform,
+               float density, float friction, float restitution, bool is_static) {
+                Transform t =
+                    transform.is_none() ? Transform::identity() : transform.cast<Transform>();
+                return self.add_shape_cylinder(radius, half_length, t, density, friction,
+                                                 restitution, is_static);
+            },
+            py::arg("radius"), py::arg("half_length"),
+            py::arg("transform") = py::none(),
+            py::arg("density") = 1000.0f,
+            py::arg("friction") = 0.5f,
+            py::arg("restitution") = 0.3f,
+            py::arg("is_static") = false,
+            R"pbdoc(
+                Adds a cylinder body+shape in one call with density-based mass.
+
+                Args:
+                    radius (float): Cylinder radius in meters.
+                    half_length (float): Half-length along local Z axis in meters.
+                    transform (Transform): Initial world transform.
+                    density (float): Mass density in kg/m^3.
+                    friction (float): Friction coefficient.
+                    restitution (float): Restitution coefficient.
+                    is_static (bool): If True, body is immovable.
+
+                Returns:
+                    int: New body index.
+            )pbdoc")
+        .def("add_shape_to_body", &ModelBuilder::add_shape_to_body,
+             py::arg("body_index"), py::arg("shape"),
+             R"pbdoc(
+                 Adds a collision shape attached to an existing body.
+
+                 Args:
+                     body_index (int): Existing body index.
+                     shape (CollisionShape): Shape descriptor.
+
+                 Returns:
+                     int: New shape index.
+             )pbdoc")
+        .def("add_collision_filter", &ModelBuilder::add_collision_filter,
+             py::arg("shape_a"), py::arg("shape_b"),
+             R"pbdoc(
+                 Disables collision between two shapes.
+
+                 Args:
+                     shape_a (int): First shape index.
+                     shape_b (int): Second shape index.
+             )pbdoc")
+        .def("set_gravity", &ModelBuilder::set_gravity,
+             py::arg("gravity"),
+             R"pbdoc(
+                 Sets gravity vector for the built model.
+
+                 Args:
+                     gravity (Vector3): Gravity in world coordinates (m/s^2).
              )pbdoc")
         .def("build", &ModelBuilder::build, R"pbdoc(
             Builds an immutable `Model` from accumulated bodies and shapes.
@@ -97,8 +280,20 @@ void bind_sim(py::module_& m) {
         .def_readonly("collision_filter_pairs", &Model::collision_filter_pairs, R"pbdoc(
             list[CollisionFilterPair]: Disabled shape pairs used to skip narrowphase.
         )pbdoc")
-        .def_readonly("shapes", &Model::shapes, R"pbdoc(
+        .def_readwrite("shapes", &Model::shapes, R"pbdoc(
             list[CollisionShape]: Collision shape definitions.
+        )pbdoc")
+        .def_readwrite("gravity", &Model::gravity, R"pbdoc(
+            Vector3: World gravity vector (m/s^2). Default is (0, -9.81, 0).
+        )pbdoc")
+        .def_readwrite("fluid_blocks", &Model::fluid_blocks, R"pbdoc(
+            list[FluidBlockDef]: Fluid particle block definitions.
+        )pbdoc")
+        .def_readwrite("fluid_materials", &Model::fluid_materials, R"pbdoc(
+            list[FluidMaterial]: Optional multi-material table (indexed by block.material_index).
+        )pbdoc")
+        .def_readwrite("articulations", &Model::articulations, R"pbdoc(
+            list[Articulation]: Tree-structured articulated robots.
         )pbdoc");
 
     // --- SolverSettings ---
@@ -133,12 +328,57 @@ void bind_sim(py::module_& m) {
             float: EMA smoothing factor for energy (0-1).
         )pbdoc");
 
+    // --- SolverBase (abstract) ---
+    py::class_<SolverBase>(m, "SolverBase", R"pbdoc(
+        Abstract base class for all physics solvers.
+    )pbdoc")
+        .def("name", &SolverBase::name)
+        .def_property_readonly("contacts",
+             &SolverBase::contacts,
+             py::return_value_policy::reference_internal);
+
+    // --- SolverSequentialImpulse ---
+    py::class_<SolverSequentialImpulse, SolverBase>(m, "SolverSequentialImpulse", R"pbdoc(
+        PGS contact solver for free rigid bodies.
+    )pbdoc")
+        .def(py::init<SolverSettings>(),
+             py::arg("settings") = SolverSettings{});
+
+
     // --- SimState ---
     py::class_<SimState>(m, "SimState", R"pbdoc(
         Mutable simulation state for all bodies in the world.
+
+        Can be created independently via ``SimState.from_model()`` and
+        deep-copied with ``clone()`` for parallel rollout / checkpoint.
     )pbdoc")
         .def(py::init<>(), R"pbdoc(
             Creates an empty simulation state.
+        )pbdoc")
+        .def_static("from_model",
+             [](const Model& model, std::optional<Device> device) {
+                 return SimState::from_model(model, device.value_or(Device::cpu()));
+             },
+             py::arg("model"),
+             py::arg("device") = py::none(),
+             R"pbdoc(
+                 Creates a SimState initialized from a model's initial transforms.
+
+                 Args:
+                     model (Model): Model providing body count and initial transforms.
+                     device (Device): Target compute device (default: CPU).
+
+                 Returns:
+                     SimState: Newly constructed state.
+             )pbdoc")
+        .def("clone", &SimState::clone, R"pbdoc(
+            Deep-copies this state into an independent SimState.
+
+            Returns:
+                SimState: Independent copy.
+        )pbdoc")
+        .def_property_readonly("device", &SimState::device, R"pbdoc(
+            Device: Compute device associated with this state.
         )pbdoc")
         .def_readonly("transforms", &SimState::transforms, R"pbdoc(
             list[Transform]: World transforms per body.
@@ -224,6 +464,39 @@ void bind_sim(py::module_& m) {
                          positions ``(N, 3)`` float32 and
                          quaternions ``(N, 4)`` float32 in ``[x, y, z, w]`` order.
              )pbdoc")
+        .def_property("fluid_state",
+             [](SimState& s) -> ParticleState& { return s.fluid_state; },
+             [](SimState& s, const ParticleState& p) { s.fluid_state = p; },
+             py::return_value_policy::reference_internal,
+             R"pbdoc(
+                 ParticleState: Fluid particle state (positions, velocities, etc.).
+             )pbdoc")
+        .def_readonly("q", &SimState::q, R"pbdoc(
+            list[ndarray]: Generalized position vectors per articulation.
+        )pbdoc")
+        .def_readonly("qd", &SimState::qd, R"pbdoc(
+            list[ndarray]: Generalized velocity vectors per articulation.
+        )pbdoc")
+        .def("set_q",
+             [](SimState& s, int art_idx, const VecXf& q) { s.q.at(art_idx) = q; },
+             py::arg("art_idx"), py::arg("q"),
+             R"pbdoc(
+                 Sets the generalized positions for one articulation.
+
+                 Args:
+                     art_idx (int): Articulation index.
+                     q (ndarray): New generalized positions.
+             )pbdoc")
+        .def("set_qd",
+             [](SimState& s, int art_idx, const VecXf& qd) { s.qd.at(art_idx) = qd; },
+             py::arg("art_idx"), py::arg("qd"),
+             R"pbdoc(
+                 Sets the generalized velocities for one articulation.
+
+                 Args:
+                     art_idx (int): Articulation index.
+                     qd (ndarray): New generalized velocities.
+             )pbdoc")
         .def("get_transforms_into",
              [](const SimState& s,
                 py::array_t<float, py::array::c_style | py::array::forcecast> pos_arr,
@@ -292,28 +565,54 @@ void bind_sim(py::module_& m) {
 
     // --- World ---
     py::class_<World>(m, "World", R"pbdoc(
-        Top-level container that advances free-rigid-body simulation.
+        Top-level simulation container with pluggable solver.
     )pbdoc")
-        .def(py::init<const Model&, SolverSettings>(),
+        .def(
+            py::init([](const Model& model, py::object solver_settings, py::object xpbd_settings,
+                        py::object pbf_settings, float fluid_boundary_extent) {
+                SolverSettings ss =
+                    solver_settings.is_none() ? SolverSettings{} : solver_settings.cast<SolverSettings>();
+                XPBDSolverSettings xs =
+                    xpbd_settings.is_none() ? XPBDSolverSettings{} : xpbd_settings.cast<XPBDSolverSettings>();
+                PBFSettings ps =
+                    pbf_settings.is_none() ? PBFSettings{} : pbf_settings.cast<PBFSettings>();
+                return std::make_unique<World>(model, ss, xs, ps, fluid_boundary_extent);
+            }),
              py::arg("model"),
-             py::arg("solver_settings") = SolverSettings{},
+             py::arg("solver_settings") = py::none(),
+             py::arg("xpbd_settings") = py::none(),
+             py::arg("pbf_settings") = py::none(),
+             py::arg("fluid_boundary_extent") = 1.0f,
              R"pbdoc(
-                 Creates a simulation world from an immutable model.
+                 Creates a unified simulation world from an immutable model.
 
                  Args:
                      model (Model): Immutable model definition.
-                     solver_settings (SolverSettings): Contact solver parameters.
+                     solver_settings (SolverSettings): Contact solver parameters for rigid bodies.
+                     xpbd_settings (XPBDSolverSettings): XPBD solver parameters for articulations.
+                     pbf_settings (PBFSettings): PBF solver parameters for fluid particles.
+                     fluid_boundary_extent (float): Half-extent for plane boundary sampling (m).
              )pbdoc")
-        .def("step", &World::step, py::arg("dt"),
+        .def("step", static_cast<void (World::*)(float)>(&World::step),
+             py::arg("dt"),
              py::call_guard<py::gil_scoped_release>(),
              R"pbdoc(
-                 Advances simulation by one fixed time step.
+                 Advances simulation by one fixed time step using internal state.
 
                  Args:
                      dt (float): Time step in seconds.
+             )pbdoc")
+        .def("step_with_control",
+             static_cast<void (World::*)(SimState&, const Control&, float)>(&World::step),
+             py::arg("state"), py::arg("control"), py::arg("dt"),
+             py::call_guard<py::gil_scoped_release>(),
+             R"pbdoc(
+                 Advances simulation with explicit state and control inputs.
 
-                 Returns:
-                     None
+                 Args:
+                     state (SimState): Mutable simulation state.
+                     control (Control): External control inputs.
+                     dt (float): Time step in seconds.
              )pbdoc")
         .def("set_gravity", &World::set_gravity, py::arg("gravity"),
              R"pbdoc(
@@ -321,9 +620,6 @@ void bind_sim(py::module_& m) {
 
                  Args:
                      gravity (Vector3): Gravity in world coordinates (m/s^2).
-
-                 Returns:
-                     None
              )pbdoc")
         .def_property_readonly("gravity", &World::gravity, R"pbdoc(
             Vector3: Current gravity vector in world coordinates (m/s^2).
@@ -343,6 +639,12 @@ void bind_sim(py::module_& m) {
              R"pbdoc(
                  list[ContactPoint]: Contact points generated during last step.
              )pbdoc")
+        .def_property_readonly("solver_settings",
+             &World::solver_settings,
+             py::return_value_policy::reference_internal,
+             R"pbdoc(
+                 SolverSettings: Contact solver settings (for default PGS solver).
+             )pbdoc")
         .def_property_readonly("performance_monitor",
              py::overload_cast<>(&World::performance_monitor),
              py::return_value_policy::reference_internal,
@@ -357,9 +659,6 @@ void bind_sim(py::module_& m) {
                  Args:
                      body_index (int): Body index.
                      force (Vector3): Force in world coordinates (N).
-
-                 Returns:
-                     None
              )pbdoc")
         .def("apply_torque", &World::apply_torque,
              py::arg("body_index"), py::arg("torque"),
@@ -369,52 +668,21 @@ void bind_sim(py::module_& m) {
                  Args:
                      body_index (int): Body index.
                      torque (Vector3): Torque in world coordinates (N*m).
-
-                 Returns:
-                     None
+             )pbdoc")
+        .def_property_readonly("xpbd_solver",
+             py::overload_cast<>(&World::xpbd_solver),
+             py::return_value_policy::reference_internal,
+             R"pbdoc(
+                 XPBDSolver: Articulated XPBD solver (reference).
+             )pbdoc")
+        .def_property_readonly("boundary_particles",
+             &World::boundary_particles,
+             py::return_value_policy::reference_internal,
+             R"pbdoc(
+                 list[BoundaryParticle]: Boundary particles sampled from rigid shapes.
              )pbdoc");
-
-    py::class_<ArticulatedWorld>(m, "ArticulatedWorld", R"pbdoc(
-        High-level articulated simulation container backed by XPBD.
-    )pbdoc")
-        .def(py::init([](const SceneBuildResult& scene) {
-                 return ArticulatedWorld(scene, XPBDSolverSettings{});
-             }),
-             py::arg("scene"))
-        .def(py::init<const SceneBuildResult&, XPBDSolverSettings>(),
-             py::arg("scene"),
-             py::arg("solver_settings"))
-        .def("step", &ArticulatedWorld::step, py::arg("dt"),
-             py::call_guard<py::gil_scoped_release>())
-        .def("set_gravity", &ArticulatedWorld::set_gravity, py::arg("gravity"))
-        .def_property_readonly("gravity", &ArticulatedWorld::gravity)
-        .def_property("q",
-            [](const ArticulatedWorld& self) { return self.q(); },
-            &ArticulatedWorld::set_q)
-        .def_property("qd",
-            [](const ArticulatedWorld& self) { return self.qd(); },
-            &ArticulatedWorld::set_qd)
-        .def_property_readonly("joint_names", &ArticulatedWorld::joint_names)
-        .def_property_readonly("joint_positions", &ArticulatedWorld::joint_positions)
-        .def_property_readonly("contacts", &ArticulatedWorld::contacts,
-            py::return_value_policy::reference_internal)
-        .def_property_readonly("metadata", &ArticulatedWorld::metadata,
-            py::return_value_policy::reference_internal)
-        .def_property_readonly("solver", py::overload_cast<>(&ArticulatedWorld::solver),
-            py::return_value_policy::reference_internal)
-        .def("set_joint_positions", &ArticulatedWorld::set_joint_positions,
-             py::arg("positions"))
-        .def("set_default_drive_gains", &ArticulatedWorld::set_default_drive_gains,
-             py::arg("stiffness"), py::arg("damping"))
-        .def("clear_target_positions", &ArticulatedWorld::clear_target_positions)
-        .def("set_target_positions", &ArticulatedWorld::set_target_positions,
-             py::arg("targets"))
-        .def("add_static_shape", &ArticulatedWorld::add_static_shape, py::arg("shape"))
-        .def("add_ground_plane", &ArticulatedWorld::add_ground_plane,
-             py::arg("normal"),
-             py::arg("offset"),
-             py::arg("friction") = 0.8f,
-             py::arg("restitution") = 0.0f);
 }
+
+
 
 

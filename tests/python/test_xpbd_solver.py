@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import numpy.testing as npt
 
 import novaphy
@@ -184,12 +184,12 @@ def test_xpbd_solver_target_position_drive_converges():
     qd = np.array([0.0], dtype=np.float32)
     tau = np.zeros(1, dtype=np.float32)
 
-    drive = novaphy.XPBDJointDrive()
-    drive.mode = novaphy.JointDriveMode.TargetPosition
+    drive = novaphy.JointDrive()
+    drive.mode = novaphy.JointTargetMode.TargetPosition
     drive.target_position = 0.6
     drive.stiffness = 120.0
     drive.damping = 8.0
-    control = novaphy.XPBDControl()
+    control = novaphy.Control()
     control.joint_drives = [drive]
 
     solver = novaphy.XPBDSolver()
@@ -227,3 +227,25 @@ def test_xpbd_solver_double_pendulum_stays_finite_under_gravity():
 
     assert np.all(np.isfinite(q))
     assert np.all(np.isfinite(qd))
+
+
+def test_world_routes_joint_forces_per_articulation():
+    art_a = _make_slide_articulation([1.0, 0.0, 0.0])
+    art_b = _make_slide_articulation([1.0, 0.0, 0.0])
+
+    model = novaphy.ModelBuilder().build()
+    model.gravity = np.zeros(3, dtype=np.float32)
+    model.articulations = [art_a, art_b]
+
+    world = novaphy.World(model)
+
+    control = novaphy.Control()
+    control.articulation_joint_forces = [
+        np.array([2.0], dtype=np.float32),
+        np.array([-3.0], dtype=np.float32),
+    ]
+
+    world.step_with_control(world.state, control, 1.0 / 60.0)
+
+    assert world.state.qd[0][0] > 0.0
+    assert world.state.qd[1][0] < 0.0

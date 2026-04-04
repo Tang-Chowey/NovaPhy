@@ -167,3 +167,21 @@ def test_apply_force():
 
     x = world.state.transforms[0].position[0]
     assert x > 0, f"Box should move in +X with applied force, got x={x}"
+
+
+def test_world_set_gravity_does_not_mutate_model_definition():
+    builder = novaphy.ModelBuilder()
+    model = builder.build()
+    world = novaphy.World(model)
+
+    npt.assert_allclose(world.model.gravity, [0.0, -9.81, 0.0], atol=1e-6)
+
+    world.set_gravity(np.array([0.0, 0.0, 0.0], dtype=np.float32))
+
+    npt.assert_allclose(world.gravity, [0.0, 0.0, 0.0], atol=1e-6)
+    npt.assert_allclose(
+        world.model.gravity,
+        [0.0, -9.81, 0.0],
+        atol=1e-6,
+        err_msg="World runtime gravity should not mutate the immutable Model definition.",
+    )

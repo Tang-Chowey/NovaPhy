@@ -98,6 +98,7 @@ def test_fluid_block_def_defaults():
     block = novaphy.FluidBlockDef()
     npt.assert_allclose(block.particle_spacing, 0.02, atol=1e-6)
     npt.assert_allclose(block.rest_density, 1000.0, atol=1e-3)
+    assert block.material_index == 0
     npt.assert_allclose(block.lower, [0, 0, 0])
     npt.assert_allclose(block.upper, [0, 0, 0])
 

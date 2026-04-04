@@ -18,10 +18,11 @@ void XPBDSolver::step(const Articulation& model,
                       const VecXf& tau,
                       const Vec3f& gravity,
                       float dt,
-                      const XPBDControl& control) {
+                      const Control& control,
+                      std::span<const SpatialVector> f_ext) {
     Model empty_model;
     std::vector<CollisionShape> no_static_shapes;
-    step_with_contacts(model, empty_model, no_static_shapes, q, qd, tau, gravity, dt, control, nullptr);
+    step_with_contacts(model, empty_model, no_static_shapes, q, qd, tau, gravity, dt, control, f_ext, nullptr);
 }
 
 void XPBDSolver::step_with_contacts(const Articulation& model,
@@ -32,7 +33,8 @@ void XPBDSolver::step_with_contacts(const Articulation& model,
                                     const VecXf& tau,
                                     const Vec3f& gravity,
                                     float dt,
-                                    const XPBDControl& control,
+                                    const Control& control,
+                                    std::span<const SpatialVector> f_ext,
                                     std::vector<ContactPoint>* contacts) {
     const int substeps = std::max(1, settings_.substeps);
     const float dt_substep = dt / static_cast<float>(substeps);
@@ -45,7 +47,7 @@ void XPBDSolver::step_with_contacts(const Articulation& model,
     std::vector<ContactPoint> reported_contacts;
     int max_contact_count = 0;
     for (int substep = 0; substep < substeps; ++substep) {
-        const VecXf qdd = featherstone::forward_dynamics(model, q, qd, tau, gravity);
+        const VecXf qdd = featherstone::forward_dynamics(model, q, qd, tau, gravity, f_ext);
         qd += qdd * dt_substep;
         integrate_positions(model, q, qd, dt_substep);
         normalize_quaternions(model, q);
@@ -199,7 +201,7 @@ int XPBDSolver::project_joint_limits(const Articulation& model,
 int XPBDSolver::project_joint_drives(const Articulation& model,
                                      VecXf& q,
                                      VecXf& qd,
-                                     const XPBDControl& control,
+                                     const Control& control,
                                      float dt) const {
     int projected = 0;
     const size_t drive_count = control.joint_drives.size();
@@ -208,8 +210,8 @@ int XPBDSolver::project_joint_drives(const Articulation& model,
         const Joint& joint = model.joints[i];
         if (joint.type != JointType::Revolute && joint.type != JointType::Slide) continue;
 
-        const XPBDJointDrive& drive = control.joint_drives[static_cast<size_t>(i)];
-        if (drive.mode != JointDriveMode::TargetPosition) continue;
+        const JointDrive& drive = control.joint_drives[static_cast<size_t>(i)];
+        if (drive.mode != JointTargetMode::TargetPosition) continue;
 
         const int qi = model.q_start(i);
         const int qdi = model.qd_start(i);

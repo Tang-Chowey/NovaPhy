@@ -1,12 +1,14 @@
-﻿#pragma once
+#pragma once
 
-#include <vector>
+#include <span>
 
 #include "novaphy/collision/broadphase.h"
 #include "novaphy/core/articulation.h"
 #include "novaphy/core/contact.h"
+#include "novaphy/core/control.h"
 #include "novaphy/core/model.h"
 #include "novaphy/math/math_types.h"
+#include "novaphy/math/spatial.h"
 
 namespace novaphy {
 
@@ -31,30 +33,7 @@ struct XPBDStepStats {
     int contact_count = 0;          /**< Number of contacts generated in the last step. */
 };
 
-/**
- * @brief Supported joint-drive modes for the articulated XPBD solver.
- */
-enum class JointDriveMode {
-    Off,
-    TargetPosition,
-};
 
-/**
- * @brief Per-joint drive configuration for one articulation link.
- */
-struct XPBDJointDrive {
-    JointDriveMode mode = JointDriveMode::Off;
-    float target_position = 0.0f;
-    float stiffness = 0.0f;
-    float damping = 0.0f;
-};
-
-/**
- * @brief Low-level control input for the articulated XPBD solver.
- */
-struct XPBDControl {
-    std::vector<XPBDJointDrive> joint_drives;
-};
 
 /**
  * @brief XPBD-style articulated solver.
@@ -69,7 +48,8 @@ public:
               const VecXf& tau,
               const Vec3f& gravity,
               float dt,
-              const XPBDControl& control = XPBDControl());
+              const Control& control = Control(),
+              std::span<const SpatialVector> f_ext = {});
 
     void step_with_contacts(const Articulation& model,
                             const Model& collision_model,
@@ -79,7 +59,8 @@ public:
                             const VecXf& tau,
                             const Vec3f& gravity,
                             float dt,
-                            const XPBDControl& control = XPBDControl(),
+                            const Control& control = Control(),
+                            std::span<const SpatialVector> f_ext = {},
                             std::vector<ContactPoint>* contacts = nullptr);
 
     XPBDSolverSettings& settings() { return settings_; }
@@ -98,7 +79,7 @@ private:
     int project_joint_drives(const Articulation& model,
                              VecXf& q,
                              VecXf& qd,
-                             const XPBDControl& control,
+                             const Control& control,
                              float dt) const;
     int project_contacts(const Articulation& model,
                          const Model& collision_model,

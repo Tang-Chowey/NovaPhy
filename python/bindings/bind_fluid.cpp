@@ -3,7 +3,7 @@
 #include <pybind11/stl.h>
 
 #include "novaphy/fluid/boundary.h"
-#include "novaphy/fluid/fluid_world.h"
+
 #include "novaphy/fluid/neighbor_search.h"
 #include "novaphy/fluid/particle_state.h"
 #include "novaphy/fluid/pbf_solver.h"
@@ -13,6 +13,15 @@ namespace py = pybind11;
 using namespace novaphy;
 
 void bind_fluid(py::module_& m) {
+    // --- FluidMaterial (multi-species) ---
+    py::class_<FluidMaterial>(m, "FluidMaterial", R"pbdoc(
+        Physical parameters for one fluid material (multi-material scenes).
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("rest_density", &FluidMaterial::rest_density, R"pbdoc(
+            float: Rest density rho_0 (kg/m^3).
+        )pbdoc");
+
     // --- SPH Kernels ---
     py::class_<SPHKernels>(m, "SPHKernels", R"pbdoc(
         SPH smoothing kernel functions for fluid simulation.
@@ -83,7 +92,10 @@ void bind_fluid(py::module_& m) {
             float: Inter-particle spacing (m).
         )pbdoc")
         .def_readwrite("rest_density", &FluidBlockDef::rest_density, R"pbdoc(
-            float: Rest density of the fluid (kg/m^3).
+            float: Rest density when Model.fluid_materials is empty (kg/m^3).
+        )pbdoc")
+        .def_readwrite("material_index", &FluidBlockDef::material_index, R"pbdoc(
+            int: Index into Model.fluid_materials when that list is non-empty.
         )pbdoc")
         .def_readwrite("initial_velocity", &FluidBlockDef::initial_velocity, R"pbdoc(
             Vector3: Initial velocity for all particles (m/s).
@@ -128,6 +140,12 @@ void bind_fluid(py::module_& m) {
         )pbdoc")
         .def_readonly("lambdas", &ParticleState::lambdas, R"pbdoc(
             list[float]: PBF constraint multipliers.
+        )pbdoc")
+        .def_readonly("particle_masses", &ParticleState::particle_masses, R"pbdoc(
+            list[float]: Per-particle mass (kg); empty if single-material init.
+        )pbdoc")
+        .def_readonly("rest_densities", &ParticleState::rest_densities, R"pbdoc(
+            list[float]: Per-particle rest density rho_0 (kg/m^3).
         )pbdoc");
 
     // --- SpatialHashGrid ---
@@ -201,6 +219,9 @@ void bind_fluid(py::module_& m) {
         .def_readwrite("xsph_viscosity", &PBFSettings::xsph_viscosity, R"pbdoc(
             float: XSPH artificial viscosity coefficient.
         )pbdoc")
+        .def_readwrite("vorticity_epsilon", &PBFSettings::vorticity_epsilon, R"pbdoc(
+            float: Vorticity confinement strength; set 0 to disable.
+        )pbdoc")
         .def_readwrite("use_domain_bounds", &PBFSettings::use_domain_bounds, R"pbdoc(
             bool: Whether to clamp particles to domain AABB.
         )pbdoc")
@@ -268,58 +289,7 @@ void bind_fluid(py::module_& m) {
             float: Akinci volume psi for density contribution.
         )pbdoc");
 
-    // --- FluidWorld ---
-    py::class_<FluidWorld, World>(m, "FluidWorld", R"pbdoc(
-        Extended simulation world with PBF fluid and rigid-fluid coupling.
-    )pbdoc")
-        .def(py::init<const Model&, const std::vector<FluidBlockDef>&,
-                       SolverSettings, PBFSettings, float>(),
-             py::arg("model"),
-             py::arg("fluid_blocks") = std::vector<FluidBlockDef>{},
-             py::arg("solver_settings") = SolverSettings{},
-             py::arg("pbf_settings") = PBFSettings{},
-             py::arg("boundary_extent") = 1.0f,
-             R"pbdoc(
-                 Creates a fluid simulation world with rigid-fluid coupling.
 
-                 Args:
-                     model (Model): Rigid-body model.
-                     fluid_blocks (list[FluidBlockDef]): Fluid block definitions.
-                     solver_settings (SolverSettings): Contact solver settings.
-                     pbf_settings (PBFSettings): PBF solver settings.
-                     boundary_extent (float): Half-extent for plane boundary sampling (m).
-             )pbdoc")
-        .def("step", &FluidWorld::step, py::arg("dt"),
-             R"pbdoc(
-                 Advance rigid-body and fluid simulation by one time step.
-
-                 Args:
-                     dt (float): Time step in seconds.
-             )pbdoc")
-        .def_property_readonly("fluid_state",
-             py::overload_cast<>(&FluidWorld::fluid_state),
-             py::return_value_policy::reference_internal,
-             R"pbdoc(
-                 ParticleState: Fluid particle state (reference).
-             )pbdoc")
-        .def_property_readonly("num_particles", &FluidWorld::num_particles, R"pbdoc(
-            int: Number of fluid particles.
-        )pbdoc")
-        .def_property_readonly("num_boundary_particles", &FluidWorld::num_boundary_particles,
-             R"pbdoc(
-                 int: Number of boundary particles.
-             )pbdoc")
-        .def_property_readonly("boundary_particles", &FluidWorld::boundary_particles,
-             py::return_value_policy::reference_internal,
-             R"pbdoc(
-                 list[BoundaryParticle]: Boundary particles for rigid-fluid coupling.
-             )pbdoc")
-        .def_property_readonly("pbf_settings",
-             py::overload_cast<>(&FluidWorld::pbf_settings),
-             py::return_value_policy::reference_internal,
-             R"pbdoc(
-                 PBFSettings: PBF solver settings (reference).
-             )pbdoc");
 
     // --- Free functions ---
     m.def("generate_fluid_block", &generate_fluid_block,

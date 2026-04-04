@@ -73,7 +73,7 @@ python demos/demo_stack.py
 | `src/` | C++ implementations (mirrors include/) |
 | `python/novaphy/` | Python package (`__init__.py`, `viz.py`) |
 | `python/bindings/` | pybind11 binding files (bind_math/core/collision/sim/dynamics) |
-| `tests/python/` | pytest test files (4 files, 38 tests) |
+| `tests/python/` | pytest modules (full suite: run `pytest tests/python/`; IPC cases skip without CUDA build) |
 | `demos/` | 10 demo scripts + shared `demo_utils.py` |
 
 ## Testing Rules
@@ -81,7 +81,7 @@ python demos/demo_stack.py
 - Every new Python-exposed feature needs a pytest in `tests/python/`
 - Test names: `test_<module>.py`
 - Use analytical comparisons for physics (free fall, pendulum period, energy conservation)
-- All 38 tests must pass before committing
+- Full `pytest tests/python/` must pass before committing (IPC tests skip when IPC is disabled)
 
 ## Key Design Patterns
 

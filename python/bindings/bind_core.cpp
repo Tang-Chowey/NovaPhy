@@ -231,40 +231,54 @@ void bind_core(py::module_& m) {
             R"pbdoc(
                 float: Cylinder half-length along local Z axis in meters.
             )pbdoc")
-        .def_static("make_box", &CollisionShape::make_box,
-                     py::arg("half_extents"), py::arg("body_idx"),
-                     py::arg("local") = Transform::identity(),
-                     py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
-                     R"pbdoc(
-                         Creates a box collision shape.
+        .def_static("make_box",
+            [](const Vec3f& half_extents, int body_idx, py::object local, float friction,
+               float restitution, int art_idx, int link_idx) {
+                Transform l = local.is_none() ? Transform::identity() : local.cast<Transform>();
+                return CollisionShape::make_box(half_extents, body_idx, l, friction, restitution,
+                                                  art_idx, link_idx);
+            },
+            py::arg("half_extents"), py::arg("body_idx"),
+            py::arg("local") = py::none(),
+            py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
+            py::arg("art_idx") = -1, py::arg("link_idx") = -1,
+            R"pbdoc(
+                Creates a box collision shape.
 
-                         Args:
-                             half_extents (Vector3): Box half extents (m).
-                             body_idx (int): Owning body index.
-                             local (Transform): Local shape pose in body frame.
-                             friction (float): Friction coefficient.
-                             restitution (float): Restitution coefficient.
+                Args:
+                    half_extents (Vector3): Box half extents (m).
+                    body_idx (int): Owning body index.
+                    local (Transform): Local shape pose in body frame.
+                    friction (float): Friction coefficient.
+                    restitution (float): Restitution coefficient.
 
-                         Returns:
-                             CollisionShape: Box shape descriptor.
-                     )pbdoc")
-        .def_static("make_sphere", &CollisionShape::make_sphere,
-                     py::arg("radius"), py::arg("body_idx"),
-                     py::arg("local") = Transform::identity(),
-                     py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
-                     R"pbdoc(
-                         Creates a sphere collision shape.
+                Returns:
+                    CollisionShape: Box shape descriptor.
+            )pbdoc")
+        .def_static("make_sphere",
+            [](float radius, int body_idx, py::object local, float friction,
+               float restitution, int art_idx, int link_idx) {
+                Transform l = local.is_none() ? Transform::identity() : local.cast<Transform>();
+                return CollisionShape::make_sphere(radius, body_idx, l, friction, restitution,
+                                                     art_idx, link_idx);
+            },
+            py::arg("radius"), py::arg("body_idx"),
+            py::arg("local") = py::none(),
+            py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
+            py::arg("art_idx") = -1, py::arg("link_idx") = -1,
+            R"pbdoc(
+                Creates a sphere collision shape.
 
-                         Args:
-                             radius (float): Sphere radius in meters.
-                             body_idx (int): Owning body index.
-                             local (Transform): Local shape pose in body frame.
-                             friction (float): Friction coefficient.
-                             restitution (float): Restitution coefficient.
+                Args:
+                    radius (float): Sphere radius in meters.
+                    body_idx (int): Owning body index.
+                    local (Transform): Local shape pose in body frame.
+                    friction (float): Friction coefficient.
+                    restitution (float): Restitution coefficient.
 
-                         Returns:
-                             CollisionShape: Sphere shape descriptor.
-                     )pbdoc")
+                Returns:
+                    CollisionShape: Sphere shape descriptor.
+            )pbdoc")
         .def_static("make_plane", &CollisionShape::make_plane,
                      py::arg("normal"), py::arg("offset"),
                      py::arg("friction") = 0.5f, py::arg("restitution") = 0.0f,
@@ -280,24 +294,31 @@ void bind_core(py::module_& m) {
                          Returns:
                              CollisionShape: Plane shape descriptor.
                      )pbdoc")
-        .def_static("make_cylinder", &CollisionShape::make_cylinder,
-                     py::arg("radius"), py::arg("half_length"), py::arg("body_idx"),
-                     py::arg("local") = Transform::identity(),
-                     py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
-                     R"pbdoc(
-                         Creates a cylinder collision shape aligned along local Z.
+        .def_static("make_cylinder",
+            [](float radius, float half_length, int body_idx, py::object local, float friction,
+               float restitution, int art_idx, int link_idx) {
+                Transform l = local.is_none() ? Transform::identity() : local.cast<Transform>();
+                return CollisionShape::make_cylinder(radius, half_length, body_idx, l, friction,
+                                                       restitution, art_idx, link_idx);
+            },
+            py::arg("radius"), py::arg("half_length"), py::arg("body_idx"),
+            py::arg("local") = py::none(),
+            py::arg("friction") = 0.5f, py::arg("restitution") = 0.3f,
+            py::arg("art_idx") = -1, py::arg("link_idx") = -1,
+            R"pbdoc(
+                Creates a cylinder collision shape aligned along local Z.
 
-                         Args:
-                             radius (float): Cylinder radius in meters.
-                             half_length (float): Half-length along local Z axis in meters.
-                             body_idx (int): Owning body index.
-                             local (Transform): Local shape pose in body frame.
-                             friction (float): Friction coefficient.
-                             restitution (float): Restitution coefficient.
+                Args:
+                    radius (float): Cylinder radius in meters.
+                    half_length (float): Half-length along local Z axis in meters.
+                    body_idx (int): Owning body index.
+                    local (Transform): Local shape pose in body frame.
+                    friction (float): Friction coefficient.
+                    restitution (float): Restitution coefficient.
 
-                         Returns:
-                             CollisionShape: Cylinder shape descriptor.
-                     )pbdoc")
+                Returns:
+                    CollisionShape: Cylinder shape descriptor.
+            )pbdoc")
         .def("compute_aabb", &CollisionShape::compute_aabb, py::arg("body_transform"), R"pbdoc(
             Computes world-space AABB for the shape.
 

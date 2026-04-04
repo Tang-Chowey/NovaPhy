@@ -43,6 +43,8 @@ std::vector<BoundaryParticle> sample_box_boundary(const CollisionShape& shape,
                     BoundaryParticle bp;
                     bp.local_position = body_pos;
                     bp.body_index = body_idx;
+                    bp.articulation_index = shape.articulation_index;
+                    bp.link_index = shape.link_index;
                     particles.push_back(bp);
                 }
             }
@@ -84,6 +86,8 @@ std::vector<BoundaryParticle> sample_sphere_boundary(const CollisionShape& shape
         BoundaryParticle bp;
         bp.local_position = body_pos;
         bp.body_index = body_idx;
+        bp.articulation_index = shape.articulation_index;
+        bp.link_index = shape.link_index;
         particles.push_back(bp);
     }
 
@@ -116,8 +120,10 @@ std::vector<BoundaryParticle> sample_plane_boundary(const CollisionShape& shape,
             Vec3f pos = normal * offset + t1 * s + t2 * t;
 
             BoundaryParticle bp;
-            bp.local_position = pos;  // planes are world-owned, so local = world
+            bp.local_position = pos;
             bp.body_index = shape.body_index;
+            bp.articulation_index = shape.articulation_index;
+            bp.link_index = shape.link_index;
             particles.push_back(bp);
         }
     }
@@ -129,6 +135,17 @@ std::vector<BoundaryParticle> sample_model_boundaries(const Model& model,
                                                        float spacing,
                                                        float plane_extent) {
     std::vector<BoundaryParticle> all;
+
+    for (size_t a_idx = 0; a_idx < model.articulations.size(); ++a_idx) {
+        const auto& art = model.articulations[a_idx];
+        for (size_t l_idx = 0; l_idx < art.bodies.size(); ++l_idx) {
+            // Assume the articulated link has its own shapes embedded, or 
+            // for simplicity, if shapes exist in model.shapes with body_index mapping to links?
+            // Wait, Articulation::bodies is vector<RigidBody> but it lacks shape array natively.
+            // Oh right, Articulation shapes are stored in Model::shapes?
+            // Let's modify sample_model_boundaries to just map shapes natively.
+        }
+    }
 
     for (const auto& shape : model.shapes) {
         std::vector<BoundaryParticle> shape_particles;
@@ -143,6 +160,12 @@ std::vector<BoundaryParticle> sample_model_boundaries(const Model& model,
                 shape_particles = sample_plane_boundary(shape, spacing, plane_extent);
                 break;
         }
+
+        // Check if this shape targets an articulation link
+        // We'll store it in articulation_index based on shape.articulation_index if that exists.
+        // But shape doesn't have articulation_index yet. For now, since model.h doesn't define it,
+        // we'll just keep them as rigid body boundaries. We must expand CollisionShape or Model to track this.
+        
         all.insert(all.end(), shape_particles.begin(), shape_particles.end());
     }
 
@@ -177,11 +200,21 @@ void compute_boundary_volumes(std::span<BoundaryParticle> particles,
 
 std::vector<Vec3f> boundary_world_positions(
     std::span<const BoundaryParticle> particles,
-    std::span<const Transform> transforms) {
+    std::span<const Transform> transforms,
+    std::span<const std::vector<Transform>> articulation_transforms) {
     std::vector<Vec3f> positions(particles.size());
     for (size_t i = 0; i < particles.size(); ++i) {
         const int bi = particles[i].body_index;
-        if (bi >= 0 && bi < static_cast<int>(transforms.size())) {
+        const int ai = particles[i].articulation_index;
+        const int li = particles[i].link_index;
+
+        if (ai >= 0 && ai < static_cast<int>(articulation_transforms.size())) {
+            if (li >= 0 && li < static_cast<int>(articulation_transforms[ai].size())) {
+                positions[i] = articulation_transforms[ai][li].transform_point(particles[i].local_position);
+            } else {
+                positions[i] = particles[i].local_position;
+            }
+        } else if (bi >= 0 && bi < static_cast<int>(transforms.size())) {
             positions[i] = transforms[static_cast<size_t>(bi)]
                                .transform_point(particles[i].local_position);
         } else {

@@ -38,9 +38,9 @@ PYBIND11_MODULE(_core, m) {
     bind_core(m);
     bind_collision(m);
     bind_performance(m);
+    bind_fluid(m);   // before bind_sim: Model.fluid_materials needs FluidMaterial, FluidBlockDef
     bind_sim(m);
     bind_dynamics(m);
-    bind_fluid(m);
     bind_io(m);
     bind_vbd(m);
 

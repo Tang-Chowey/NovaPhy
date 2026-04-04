@@ -118,6 +118,12 @@ from novaphy._core import (
     spatial_inertia_matrix,
     deg2rad,
     rad2deg,
+    # Device / Control
+    DeviceType,
+    Device,
+    JointTargetMode,
+    JointDrive,
+    Control,
     # Core types
     ShapeType,
     RigidBody,
@@ -136,9 +142,10 @@ from novaphy._core import (
     Model,
     CollisionFilterPair,
     SolverSettings,
+    SolverBase,
+    SolverSequentialImpulse,
     SimState,
     World,
-    ArticulatedWorld,
     # Articulated bodies
     JointType,
     Joint,
@@ -146,9 +153,6 @@ from novaphy._core import (
     ArticulatedSolver,
     XPBDSolverSettings,
     XPBDStepStats,
-    JointDriveMode,
-    XPBDJointDrive,
-    XPBDControl,
     XPBDSolver,
     # Featherstone algorithms
     forward_kinematics,
@@ -157,13 +161,13 @@ from novaphy._core import (
     forward_dynamics,
     # Fluid simulation
     SPHKernels,
+    FluidMaterial,
     FluidBlockDef,
     ParticleState,
     SpatialHashGrid,
     generate_fluid_block,
     PBFSettings,
     PBFSolver,
-    FluidWorld,
     BoundaryParticle,
     sample_model_boundaries,
     UrdfGeometryType,
@@ -206,6 +210,9 @@ try:
 except ImportError:
     pass
 
+# Phase-3 backward-compatible wrappers
+from novaphy._compat import ArticulatedWorld, FluidWorld  # noqa: E402
+
 __version__ = version()
 
 __all__ = [
@@ -219,6 +226,11 @@ __all__ = [
     "spatial_inertia_matrix",
     "deg2rad",
     "rad2deg",
+    "DeviceType",
+    "Device",
+    "JointTargetMode",
+    "JointDrive",
+    "Control",
     "ShapeType",
     "RigidBody",
     "CollisionShape",
@@ -234,31 +246,29 @@ __all__ = [
     "Model",
     "CollisionFilterPair",
     "SolverSettings",
+    "SolverBase",
+    "SolverSequentialImpulse",
     "SimState",
     "World",
-    "ArticulatedWorld",
     "JointType",
     "Joint",
     "Articulation",
     "ArticulatedSolver",
     "XPBDSolverSettings",
     "XPBDStepStats",
-    "JointDriveMode",
-    "XPBDJointDrive",
-    "XPBDControl",
     "XPBDSolver",
     "forward_kinematics",
     "inverse_dynamics",
     "mass_matrix_crba",
     "forward_dynamics",
     "SPHKernels",
+    "FluidMaterial",
     "FluidBlockDef",
     "ParticleState",
     "SpatialHashGrid",
     "generate_fluid_block",
     "PBFSettings",
     "PBFSolver",
-    "FluidWorld",
     "BoundaryParticle",
     "sample_model_boundaries",
     "UrdfGeometryType",
@@ -293,6 +303,9 @@ __all__ = [
     "VBDConfig",
     "VBDWorld",
     "VbdBackend",
+    # Phase-3 compat wrappers
+    "ArticulatedWorld",
+    "FluidWorld",
 ]
 
 # Conditionally export IPC symbols

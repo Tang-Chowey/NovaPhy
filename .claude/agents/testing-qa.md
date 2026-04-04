@@ -42,7 +42,7 @@ pytest tests/python/test_collision.py -v
 pytest tests/python/test_free_body_sim.py::test_free_fall -v
 ```
 
-### Current Status: 55 tests (46 core + 9 IPC), all passing
+### Current Status: large Python suite under `tests/python/`; IPC tests skip without CUDA IPC build
 
 ## Testing Conventions
 

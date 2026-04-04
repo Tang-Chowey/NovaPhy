@@ -4,6 +4,7 @@
  */
 #include "novaphy/sim/state.h"
 #include "novaphy/core/contact.h"
+#include "novaphy/core/model.h"
 #include <map>
 
 namespace novaphy {
@@ -26,11 +27,68 @@ void SimState::init(std::span<const Transform> initial_transforms) {
 }
 
 /**
+ * @brief Creates a SimState from a Model's initial transforms.
+ * @param[in] model Model providing body count and initial poses.
+ * @param[in] device Target compute device.
+ * @return Newly initialized SimState.
+ */
+SimState SimState::from_model(const Model& model, Device device) {
+    SimState s;
+    s.init(model.initial_transforms);
+    s.device_ = device;
+
+    // Initialize articulated states if present
+    const int num_articulations = static_cast<int>(model.articulations.size());
+    s.q.resize(num_articulations);
+    s.qd.resize(num_articulations);
+    s.articulation_forces.resize(num_articulations);
+    for (int i = 0; i < num_articulations; ++i) {
+        s.q[i] = VecXf::Zero(model.articulations[i].total_q());
+        s.qd[i] = VecXf::Zero(model.articulations[i].total_qd());
+        s.articulation_forces[i].assign(model.articulations[i].num_links(), SpatialVector::Zero());
+    }
+
+    return s;
+}
+
+/**
+ * @brief Creates a deep copy of this state.
+ * @return Independent copy with all arrays duplicated.
+ */
+SimState SimState::clone() const {
+    SimState s;
+    s.transforms = transforms;
+    s.linear_velocities = linear_velocities;
+    s.angular_velocities = angular_velocities;
+    s.forces = forces;
+    s.torques = torques;
+    s.sleeping = sleeping;
+    s.sleep_timer = sleep_timer;
+    s.smoothed_energy = smoothed_energy;
+    s.island_id = island_id;
+    
+    s.q = q;
+    s.qd = qd;
+    s.articulation_forces = articulation_forces;
+    
+    // ParticleState deep copy is not implemented yet, so we have to manually copy it or rely
+    // on its assignment operator if it's implicitly copyable. Let's assume it has 
+    // a proper copy constructor/assignment since it's just vectors.
+    s.fluid_state = fluid_state;
+
+    s.device_ = device_;
+    return s;
+}
+
+/**
  * @brief Clears all accumulated external forces and torques.
  */
 void SimState::clear_forces() {
     for (auto& f : forces) f = Vec3f::Zero();
     for (auto& t : torques) t = Vec3f::Zero();
+    for (auto& art_f : articulation_forces) {
+        for (auto& f : art_f) f = SpatialVector::Zero();
+    }
 }
 
 /**
@@ -63,6 +121,14 @@ void SimState::set_angular_velocity(int body_index, const Vec3f& vel) {
 void SimState::apply_force(int body_index, const Vec3f& force) {
     if (body_index >= 0 && body_index < static_cast<int>(forces.size())) {
         forces[body_index] += force;
+    }
+}
+
+void SimState::apply_articulation_force(int art_idx, int link_idx, const SpatialVector& force) {
+    if (art_idx >= 0 && art_idx < static_cast<int>(articulation_forces.size())) {
+        if (link_idx >= 0 && link_idx < static_cast<int>(articulation_forces[art_idx].size())) {
+            articulation_forces[art_idx][link_idx] += force;
+        }
     }
 }
 

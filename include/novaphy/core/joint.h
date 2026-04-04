@@ -32,6 +32,13 @@ struct Joint {
     float lower_limit = 0.0f;                        /**< Lower position limit for revolute/slide joints. */
     float upper_limit = 0.0f;                        /**< Upper position limit for revolute/slide joints. */
 
+    // --- Dynamic parameters ---
+    float armature = 0.0f;       /**< Rotor inertia reflected at joint (kg*m^2). */
+    float damping = 0.0f;        /**< Viscous damping coefficient (N*m*s/rad). */
+    float friction = 0.0f;       /**< Joint friction (N*m). */
+    float effort_limit = 1e6f;   /**< Maximum joint torque/force magnitude. */
+    float velocity_limit = 1e6f; /**< Maximum joint velocity magnitude. */
+
     /**
      * @brief Get number of generalized position coordinates for this joint.
      *

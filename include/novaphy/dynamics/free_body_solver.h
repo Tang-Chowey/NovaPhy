@@ -82,6 +82,13 @@ public:
      */
     SolverSettings& settings() { return settings_; }
 
+    /**
+     * @brief Read-only access to current solver settings.
+     *
+     * @return Const reference to the internal SolverSettings.
+     */
+    const SolverSettings& settings() const { return settings_; }
+
 private:
     SolverSettings settings_;
 

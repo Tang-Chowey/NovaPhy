@@ -15,14 +15,14 @@ add_library(novaphy_core STATIC
     dynamics/featherstone.cpp
     dynamics/articulated_solver.cpp
     dynamics/xpbd_solver.cpp
-    sim/articulated_world.cpp
+    dynamics/solver_sequential_impulse.cpp
     sim/performance_monitor.cpp
     sim/state.cpp
     sim/world.cpp
     fluid/particle_state.cpp
     fluid/neighbor_search.cpp
     fluid/pbf_solver.cpp
-    fluid/fluid_world.cpp
+    fluid/boundary.cpp
     fluid/boundary.cpp
     io/urdf_parser.cpp
     io/openusd_importer.cpp

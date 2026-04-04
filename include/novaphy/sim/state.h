@@ -3,8 +3,11 @@
 #include <span>
 #include <vector>
 
-#include "novaphy/math/math_types.h"
 #include "novaphy/core/contact.h"
+#include "novaphy/core/device.h"
+#include "novaphy/fluid/particle_state.h"
+#include "novaphy/math/math_types.h"
+#include "novaphy/math/spatial.h"
 
 namespace novaphy {
 
@@ -15,6 +18,8 @@ namespace novaphy {
  * Linear quantities are in world coordinates (m, m/s, N), angular quantities
  * are in world coordinates (rad/s, N*m).
  */
+struct Model;  // Forward declaration
+
 struct SimState {
     std::vector<Transform> transforms;        /**< Body world transforms (position + quaternion orientation). */
     std::vector<Vec3f> linear_velocities;     /**< Body linear velocities in world frame (m/s). */
@@ -26,6 +31,14 @@ struct SimState {
     std::vector<float> smoothed_energy;       /**< Per-body EMA-smoothed kinetic energy. */
     std::vector<int> island_id;               /**< Island assignment for each body (-1 if not assigned). */
 
+    // --- Articulated state ---
+    std::vector<VecXf> q;                     /**< Generalized positions per articulation. */
+    std::vector<VecXf> qd;                    /**< Generalized velocities per articulation. */
+    std::vector<std::vector<SpatialVector>> articulation_forces; /**< External spatial forces per link for each articulation. */
+
+    // --- Fluid state ---
+    ParticleState fluid_state;                /**< Fluid particles. */
+
     /**
      * @brief Initialize all state arrays from the model's initial transforms.
      *
@@ -33,6 +46,39 @@ struct SimState {
      * @return void
      */
     void init(std::span<const Transform> initial_transforms);
+
+    /**
+     * @brief Create a SimState initialized from a Model's initial transforms.
+     *
+     * @param [in] model Model providing body count and initial transforms.
+     * @param [in] device Target compute device for this state.
+     * @return Newly constructed SimState.
+     */
+    static SimState from_model(const Model& model, Device device = Device::cpu());
+
+    /**
+     * @brief Create a deep copy of this state.
+     *
+     * @details All arrays are duplicated so the clone can be modified
+     * independently. Useful for RL checkpoint/restore and parallel rollout.
+     *
+     * @return Independent copy of this SimState.
+     */
+    SimState clone() const;
+
+    /**
+     * @brief Get the device this state is associated with.
+     *
+     * @return Device descriptor.
+     */
+    Device device() const { return device_; }
+
+    /**
+     * @brief Set the associated device (metadata only, does not migrate data).
+     *
+     * @param [in] dev Target device.
+     */
+    void set_device(Device dev) { device_ = dev; }
 
     /**
      * @brief Clear accumulated external forces and torques.
@@ -69,6 +115,16 @@ struct SimState {
      * @return void
      */
     void apply_force(int body_index, const Vec3f& force);
+
+    /**
+     * @brief Accumulate an external spatial force to an articulation link.
+     *
+     * @param [in] art_idx Articulation index.
+     * @param [in] link_idx Link index.
+     * @param [in] force Spatial wrench (torque; force) applied to the link frame origin.
+     * @return void
+     */
+    void apply_articulation_force(int art_idx, int link_idx, const SpatialVector& force);
 
     /**
      * @brief Accumulate an external torque on a body.
@@ -148,6 +204,9 @@ struct SimState {
      * @return void
      */
     void propagate_wake_through_island(int body_index);
+
+private:
+    Device device_ = Device::cpu();  /**< Associated compute device. */
 };
 
 }  // namespace novaphy

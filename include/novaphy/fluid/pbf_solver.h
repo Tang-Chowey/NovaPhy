@@ -17,7 +17,7 @@ struct PBFSettings {
     int solver_iterations = 4;         /**< Number of PBF constraint iterations. */
     float epsilon = 100.0f;            /**< Relaxation parameter for constraint (CFM). */
     float xsph_viscosity = 0.01f;      /**< XSPH artificial viscosity coefficient. */
-    float vorticity_epsilon = 0.0f;    /**< Vorticity confinement strength. */
+    float vorticity_epsilon = 0.02f;   /**< Vorticity confinement strength (0 disables). */
     float corr_delta_q = 0.3f;         /**< Tensile instability correction: delta_q as fraction of h. */
     float corr_k = 0.001f;             /**< Tensile instability correction: k coefficient. */
     int corr_n = 4;                    /**< Tensile instability correction: exponent n. */
@@ -105,6 +105,11 @@ private:
      * @brief Apply XSPH viscosity smoothing to velocities.
      */
     void apply_xsph_viscosity(ParticleState& state, float particle_mass);
+
+    /**
+     * @brief Vorticity confinement (Macklin-style) on post-constraint velocities.
+     */
+    void apply_vorticity_confinement(ParticleState& state, float dt, float uniform_mass);
 
     PBFSettings settings_;
     SpatialHashGrid grid_;

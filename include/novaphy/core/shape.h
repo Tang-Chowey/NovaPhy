@@ -60,7 +60,9 @@ struct CollisionShape {
     float friction = 0.5f;                              /**< Coulomb friction coefficient (dimensionless). */
     float restitution = 0.3f;                           /**< Restitution coefficient in [0, 1]. */
 
-    int body_index = -1;  /**< Owning body index, or -1 for world-owned shapes (e.g., planes). */
+    int body_index = -1;         /**< Owning body index, or -1 for world-owned shapes (e.g., planes). */
+    int articulation_index = -1; /**< Owning articulation index, or -1 if not articulated. */
+    int link_index = -1;         /**< Owning link index inside articulation, or -1. */
 
     /**
      * @brief Compute a world-space AABB for this shape.
@@ -97,11 +99,14 @@ struct CollisionShape {
      */
     static CollisionShape make_box(const Vec3f& half_extents, int body_idx,
                                    const Transform& local = Transform::identity(),
-                                   float friction = 0.5f, float restitution = 0.3f) {
+                                   float friction = 0.5f, float restitution = 0.3f,
+                                   int art_idx = -1, int link_idx = -1) {
         CollisionShape s;
         s.type = ShapeType::Box;
         s.box.half_extents = half_extents;
         s.body_index = body_idx;
+        s.articulation_index = art_idx;
+        s.link_index = link_idx;
         s.local_transform = local;
         s.friction = friction;
         s.restitution = restitution;
@@ -120,11 +125,14 @@ struct CollisionShape {
      */
     static CollisionShape make_sphere(float radius, int body_idx,
                                       const Transform& local = Transform::identity(),
-                                      float friction = 0.5f, float restitution = 0.3f) {
+                                      float friction = 0.5f, float restitution = 0.3f,
+                                      int art_idx = -1, int link_idx = -1) {
         CollisionShape s;
         s.type = ShapeType::Sphere;
         s.sphere.radius = radius;
         s.body_index = body_idx;
+        s.articulation_index = art_idx;
+        s.link_index = link_idx;
         s.local_transform = local;
         s.friction = friction;
         s.restitution = restitution;
@@ -165,12 +173,15 @@ struct CollisionShape {
      */
     static CollisionShape make_cylinder(float radius, float half_length, int body_idx,
                                         const Transform& local = Transform::identity(),
-                                        float friction = 0.5f, float restitution = 0.3f) {
+                                        float friction = 0.5f, float restitution = 0.3f,
+                                        int art_idx = -1, int link_idx = -1) {
         CollisionShape s;
         s.type = ShapeType::Cylinder;
         s.cylinder.radius = radius;
         s.cylinder.half_length = half_length;
         s.body_index = body_idx;
+        s.articulation_index = art_idx;
+        s.link_index = link_idx;
         s.local_transform = local;
         s.friction = friction;
         s.restitution = restitution;

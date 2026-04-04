@@ -4,6 +4,7 @@
 
 #include "novaphy/core/articulation.h"
 #include "novaphy/core/joint.h"
+#include "novaphy/core/control.h"
 #include "novaphy/dynamics/articulated_solver.h"
 #include "novaphy/dynamics/xpbd_solver.h"
 #include "novaphy/dynamics/featherstone.h"
@@ -59,6 +60,21 @@ void bind_dynamics(py::module_& m) {
         )pbdoc")
         .def_readwrite("upper_limit", &Joint::upper_limit, R"pbdoc(
             float: Upper position limit for revolute/slide joints.
+        )pbdoc")
+        .def_readwrite("armature", &Joint::armature, R"pbdoc(
+            float: Rotor inertia reflected at joint (kg*m^2).
+        )pbdoc")
+        .def_readwrite("damping", &Joint::damping, R"pbdoc(
+            float: Viscous damping coefficient (N*m*s/rad).
+        )pbdoc")
+        .def_readwrite("friction", &Joint::friction, R"pbdoc(
+            float: Joint friction torque/force (N*m or N).
+        )pbdoc")
+        .def_readwrite("effort_limit", &Joint::effort_limit, R"pbdoc(
+            float: Maximum joint torque/force magnitude.
+        )pbdoc")
+        .def_readwrite("velocity_limit", &Joint::velocity_limit, R"pbdoc(
+            float: Maximum joint velocity magnitude.
         )pbdoc")
         .def("num_q", &Joint::num_q, R"pbdoc(
             Returns the number of generalized position coordinates for this joint.
@@ -246,21 +262,6 @@ void bind_dynamics(py::module_& m) {
         .def_readonly("projected_constraints", &XPBDStepStats::projected_constraints)
         .def_readonly("contact_count", &XPBDStepStats::contact_count);
 
-    py::enum_<JointDriveMode>(m, "JointDriveMode")
-        .value("Off", JointDriveMode::Off)
-        .value("TargetPosition", JointDriveMode::TargetPosition);
-
-    py::class_<XPBDJointDrive>(m, "XPBDJointDrive")
-        .def(py::init<>())
-        .def_readwrite("mode", &XPBDJointDrive::mode)
-        .def_readwrite("target_position", &XPBDJointDrive::target_position)
-        .def_readwrite("stiffness", &XPBDJointDrive::stiffness)
-        .def_readwrite("damping", &XPBDJointDrive::damping);
-
-    py::class_<XPBDControl>(m, "XPBDControl")
-        .def(py::init<>())
-        .def_readwrite("joint_drives", &XPBDControl::joint_drives);
-
     py::class_<XPBDSolver>(m, "XPBDSolver", R"pbdoc(
         Reduced-coordinate XPBD solver scaffold for articulated systems.
     )pbdoc")
@@ -276,12 +277,12 @@ void bind_dynamics(py::module_& m) {
         .def("step", [](XPBDSolver& self, const Articulation& model,
                          VecXf q, VecXf qd, const VecXf& tau,
                          const Vec3f& gravity, float dt,
-                         const XPBDControl& control) {
+                         const Control& control) {
             self.step(model, q, qd, tau, gravity, dt, control);
             return std::make_pair(q, qd);
         }, py::arg("model"), py::arg("q"), py::arg("qd"),
            py::arg("tau"), py::arg("gravity"), py::arg("dt"),
-           py::arg("control") = XPBDControl())
+           py::arg("control") = Control())
         .def("step_with_contacts", [](XPBDSolver& self,
                                        const Articulation& model,
                                        const Model& collision_model,
@@ -291,11 +292,11 @@ void bind_dynamics(py::module_& m) {
                                        const VecXf& tau,
                                        const Vec3f& gravity,
                                        float dt,
-                                       const XPBDControl& control) {
+                                       const Control& control) {
             std::vector<ContactPoint> contacts;
-            self.step_with_contacts(model, collision_model, static_shapes, q, qd, tau, gravity, dt, control, &contacts);
+            self.step_with_contacts(model, collision_model, static_shapes, q, qd, tau, gravity, dt, control, {}, &contacts);
             return py::make_tuple(q, qd, contacts);
         }, py::arg("model"), py::arg("collision_model"), py::arg("static_shapes"),
            py::arg("q"), py::arg("qd"), py::arg("tau"), py::arg("gravity"), py::arg("dt"),
-           py::arg("control") = XPBDControl());
+           py::arg("control") = Control());
 }

@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "novaphy/collision/ibroadphase.h"
 #include "novaphy/core/aabb.h"
 
 namespace novaphy {
@@ -36,7 +37,7 @@ struct BroadPhasePair {
  * pairs before expensive narrowphase tests. This stage filters impossible
  * collisions and reduces overall contact-detection cost.
  */
-class SweepAndPrune {
+class SweepAndPrune : public IBroadPhase {
 public:
     /**
      * @brief Construct an empty broadphase accelerator.
@@ -51,14 +52,11 @@ public:
      * @return void
      */
     void update(const std::vector<AABB>& body_aabbs,
-                const std::vector<bool>& static_mask);
+                const std::vector<bool>& static_mask) override;
 
-    /**
-     * @brief Get broadphase overlap candidates from the latest update.
-     *
-     * @return Read-only list of potentially overlapping pairs.
-     */
-    const std::vector<BroadPhasePair>& get_pairs() const { return pairs_; }
+    const std::vector<BroadPhasePair>& get_pairs() const override { return pairs_; }
+
+    std::string name() const override { return "SweepAndPrune"; }
 
 private:
     /**

@@ -14,6 +14,7 @@ def test_pbf_settings_defaults():
     npt.assert_allclose(s.rest_density, 1000.0, atol=1e-3)
     npt.assert_allclose(s.kernel_radius, 0.1, atol=1e-6)
     assert s.solver_iterations == 4
+    assert s.vorticity_epsilon > 0.0
 
 
 def test_pbf_settings_particle_mass():
@@ -41,6 +42,7 @@ def _make_pbf_state(spacing=0.025, block_size=0.3):
     settings.rest_density = 1000.0
     settings.solver_iterations = 4
     settings.epsilon = 100.0
+    settings.vorticity_epsilon = 0.0  # keep legacy tests deterministic
 
     state = novaphy.ParticleState()
     state.init(positions)
@@ -164,6 +166,7 @@ def test_fluid_world_step():
     pbf = novaphy.PBFSettings()
     pbf.kernel_radius = 0.2
     pbf.solver_iterations = 3
+    pbf.vorticity_epsilon = 0.0
 
     world = novaphy.FluidWorld(model, [block], novaphy.SolverSettings(), pbf)
 

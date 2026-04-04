@@ -12,6 +12,20 @@
 
 namespace novaphy {
 
+namespace {
+
+inline float p_mass(const ParticleState& s, int idx, float uniform_mass) {
+    return (idx < static_cast<int>(s.particle_masses.size())) ? s.particle_masses[idx]
+                                                               : uniform_mass;
+}
+
+inline float p_rho0(const ParticleState& s, int idx, float uniform_rho0) {
+    return (idx < static_cast<int>(s.rest_densities.size())) ? s.rest_densities[idx]
+                                                             : uniform_rho0;
+}
+
+}  // namespace
+
 PBFSolver::PBFSolver(const PBFSettings& settings)
     : settings_(settings), grid_(settings.kernel_radius) {}
 
@@ -98,6 +112,12 @@ void PBFSolver::step(ParticleState& state, float dt, const Vec3f& gravity,
         apply_xsph_viscosity(state, particle_mass);
     }
 
+    // 6b. Vorticity confinement (optional)
+    if (settings_.vorticity_epsilon > 1e-8f) {
+        detail::PerformancePhaseScope phase_scope(monitor, "fluid.pbf.vorticity");
+        apply_vorticity_confinement(state, dt, particle_mass);
+    }
+
     // 7. Update positions (with optional domain clamping)
     {
         detail::PerformancePhaseScope phase_scope(monitor, "fluid.pbf.commit_positions");
@@ -135,7 +155,7 @@ void PBFSolver::compute_density(ParticleState& state, float particle_mass) {
         for (int j : neighbors_[i]) {
             Vec3f r = state.predicted_positions[i] - state.predicted_positions[j];
             float r_sq = r.squaredNorm();
-            density += particle_mass * SPHKernels::poly6(r_sq, h);
+            density += p_mass(state, j, particle_mass) * SPHKernels::poly6(r_sq, h);
         }
         state.densities[i] = density;
     }
@@ -144,13 +164,14 @@ void PBFSolver::compute_density(ParticleState& state, float particle_mass) {
 void PBFSolver::compute_lambda(ParticleState& state, float particle_mass) {
     int n = state.num_particles();
     float h = settings_.kernel_radius;
-    float rho0 = settings_.rest_density;
+    float rho0_global = settings_.rest_density;
     float eps = settings_.epsilon;
-    float inv_rho0 = 1.0f / rho0;
 
     for (int i = 0; i < n; ++i) {
-        // Density constraint: C_i = rho_i / rho_0 - 1
-        float C_i = state.densities[i] * inv_rho0 - 1.0f;
+        float rho0_i = p_rho0(state, i, rho0_global);
+        float inv_rho0_i = 1.0f / rho0_i;
+        // Density constraint: C_i = rho_i / rho_0_i - 1
+        float C_i = state.densities[i] * inv_rho0_i - 1.0f;
 
         // Only enforce incompressibility (no tensile/attraction from negative C)
         if (C_i < 0.0f) {
@@ -159,7 +180,7 @@ void PBFSolver::compute_lambda(ParticleState& state, float particle_mass) {
         }
 
         // Compute gradient of C_i wrt each neighbor
-        // grad_pk C_i = (1/rho0) * m_j * grad W(pi - pk, h)  for k != i
+        // grad_pk C_i = (1/rho0_i) * m_j * grad W(pi - pk, h)  for k != i
         float sum_grad_sq = 0.0f;
         Vec3f grad_i = Vec3f::Zero();
 
@@ -167,7 +188,8 @@ void PBFSolver::compute_lambda(ParticleState& state, float particle_mass) {
             if (j == i) continue;
             Vec3f r = state.predicted_positions[i] - state.predicted_positions[j];
             Vec3f spiky_g = SPHKernels::spiky_grad(r, h);
-            Vec3f grad_j = (particle_mass * inv_rho0) * spiky_g;
+            float mj = p_mass(state, j, particle_mass);
+            Vec3f grad_j = (mj * inv_rho0_i) * spiky_g;
             sum_grad_sq += grad_j.squaredNorm();
             grad_i += grad_j;  // accumulate grad_C wrt particle i
         }
@@ -181,14 +203,15 @@ void PBFSolver::compute_lambda(ParticleState& state, float particle_mass) {
 void PBFSolver::compute_delta_position(ParticleState& state, float particle_mass) {
     int n = state.num_particles();
     float h = settings_.kernel_radius;
-    float rho0 = settings_.rest_density;
-    float inv_rho0 = 1.0f / rho0;
+    float rho0_global = settings_.rest_density;
 
     // Tensile instability correction reference value
     float delta_q = settings_.corr_delta_q * h;
     float w_delta_q = SPHKernels::poly6(delta_q * delta_q, h);
 
     for (int i = 0; i < n; ++i) {
+        float rho0_i = p_rho0(state, i, rho0_global);
+        float inv_rho0_i = 1.0f / rho0_i;
         Vec3f delta_p = Vec3f::Zero();
 
         for (int j : neighbors_[i]) {
@@ -213,12 +236,11 @@ void PBFSolver::compute_delta_position(ParticleState& state, float particle_mass
                 s_corr = -settings_.corr_k * ratio_pow;
             }
 
-            // delta_p_i = (1/rho0) * sum_j (lambda_i + lambda_j + s_corr) * m_j * grad W
-            delta_p += (lambda_sum + s_corr) *
-                       particle_mass * SPHKernels::spiky_grad(r, h);
+            float mj = p_mass(state, j, particle_mass);
+            delta_p += (lambda_sum + s_corr) * mj * SPHKernels::spiky_grad(r, h);
         }
 
-        state.delta_positions[i] = delta_p * inv_rho0;
+        state.delta_positions[i] = delta_p * inv_rho0_i;
     }
 }
 
@@ -226,7 +248,7 @@ void PBFSolver::apply_xsph_viscosity(ParticleState& state, float particle_mass) 
     int n = state.num_particles();
     float h = settings_.kernel_radius;
     float c = settings_.xsph_viscosity;
-    float rho0 = settings_.rest_density;
+    float rho0_global = settings_.rest_density;
 
     // Compute velocity corrections (use delta_positions as temp buffer)
     for (int i = 0; i < n; ++i) {
@@ -237,8 +259,10 @@ void PBFSolver::apply_xsph_viscosity(ParticleState& state, float particle_mass) 
             Vec3f r = state.predicted_positions[i] - state.predicted_positions[j];
             float r_sq = r.squaredNorm();
             float w = SPHKernels::poly6(r_sq, h);
-            float rho_j = (state.densities[j] > 1e-6f) ? state.densities[j] : rho0;
-            v_corr += (particle_mass / rho_j) * v_ij * w;
+            float rho0_j = p_rho0(state, j, rho0_global);
+            float rho_j = (state.densities[j] > 1e-6f) ? state.densities[j] : rho0_j;
+            float mj = p_mass(state, j, particle_mass);
+            v_corr += (mj / rho_j) * v_ij * w;
         }
         state.delta_positions[i] = v_corr;  // temp storage
     }
@@ -246,6 +270,54 @@ void PBFSolver::apply_xsph_viscosity(ParticleState& state, float particle_mass) 
     // Apply corrections
     for (int i = 0; i < n; ++i) {
         state.velocities[i] += c * state.delta_positions[i];
+    }
+}
+
+void PBFSolver::apply_vorticity_confinement(ParticleState& state, float dt,
+                                            float uniform_mass) {
+    int n = state.num_particles();
+    float h = settings_.kernel_radius;
+    float eps = settings_.vorticity_epsilon;
+
+    std::vector<Vec3f> omega(static_cast<size_t>(n), Vec3f::Zero());
+    for (int i = 0; i < n; ++i) {
+        for (int j : neighbors_[i]) {
+            if (j == i) continue;
+            Vec3f r = state.predicted_positions[i] - state.predicted_positions[j];
+            Vec3f grad_w = SPHKernels::spiky_grad(r, h);
+            Vec3f v_ij = state.velocities[j] - state.velocities[i];
+            float rho_j = std::max(state.densities[j], 1e-6f);
+            float mj = p_mass(state, j, uniform_mass);
+            omega[static_cast<size_t>(i)] += (mj / rho_j) * v_ij.cross(grad_w);
+        }
+    }
+
+    std::vector<float> omega_len(static_cast<size_t>(n), 0.0f);
+    for (int i = 0; i < n; ++i) {
+        omega_len[static_cast<size_t>(i)] = omega[static_cast<size_t>(i)].norm();
+    }
+
+    std::vector<Vec3f> eta(static_cast<size_t>(n), Vec3f::Zero());
+    for (int i = 0; i < n; ++i) {
+        for (int j : neighbors_[i]) {
+            if (j == i) continue;
+            Vec3f r = state.predicted_positions[i] - state.predicted_positions[j];
+            float dist = r.norm();
+            if (dist < 1e-8f) continue;
+            float dw = omega_len[static_cast<size_t>(j)] - omega_len[static_cast<size_t>(i)];
+            float r_sq = r.squaredNorm();
+            float w = SPHKernels::poly6(r_sq, h);
+            eta[static_cast<size_t>(i)] += (dw * w / dist) * r;
+        }
+    }
+
+    for (int i = 0; i < n; ++i) {
+        float om = omega_len[static_cast<size_t>(i)];
+        if (om < 1e-8f) continue;
+        Vec3f omega_i = omega[static_cast<size_t>(i)];
+        Vec3f eta_i = eta[static_cast<size_t>(i)];
+        Vec3f f = eta_i.cross(omega_i / om);
+        state.velocities[i] += eps * f * dt;
     }
 }
 

@@ -19,8 +19,10 @@ namespace novaphy {
  * precomputed volume psi for density contribution.
  */
 struct BoundaryParticle {
-    Vec3f local_position = Vec3f::Zero();  /**< Position in body-local frame (m). */
-    int body_index = -1;                    /**< Owning rigid body index (-1 = static/world). */
+    Vec3f local_position = Vec3f::Zero();   /**< Position in body-local frame (m). */
+    int body_index = -1;                    /**< Free rigid body index (-1 if none or world). */
+    int articulation_index = -1;            /**< Articulated robot index (-1 if none). */
+    int link_index = -1;                    /**< Articulated link index (-1 if none). */
     float volume = 0.0f;                    /**< Akinci volume psi for density contribution. */
 };
 
@@ -87,6 +89,7 @@ void compute_boundary_volumes(std::span<BoundaryParticle> particles,
  */
 std::vector<Vec3f> boundary_world_positions(
     std::span<const BoundaryParticle> particles,
-    std::span<const Transform> transforms);
+    std::span<const Transform> transforms,
+    std::span<const std::vector<Transform>> articulation_transforms = {});
 
 }  // namespace novaphy

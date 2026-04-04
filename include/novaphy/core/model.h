@@ -1,10 +1,12 @@
-﻿#pragma once
+#pragma once
 
 #include <algorithm>
 #include <vector>
 
+#include "novaphy/core/articulation.h"
 #include "novaphy/core/body.h"
 #include "novaphy/core/shape.h"
+#include "novaphy/fluid/particle_state.h"
 #include "novaphy/math/math_types.h"
 
 namespace novaphy {
@@ -31,7 +33,11 @@ struct Model {
     std::vector<RigidBody> bodies;                /**< Rigid-body inertial properties. */
     std::vector<Transform> initial_transforms;    /**< Initial body transforms in world coordinates. */
     std::vector<CollisionShape> shapes;           /**< Collision shapes attached to bodies/world. */
+    std::vector<Articulation> articulations;      /**< Tree-structured articulated robots/mechanisms. */
+    std::vector<FluidBlockDef> fluid_blocks;      /**< Definitions for generating fluid particles. */
+    std::vector<FluidMaterial> fluid_materials;   /**< Optional multi-material table (indexed by block.material_index). */
     std::vector<CollisionFilterPair> collision_filter_pairs;  /**< Disabled shape-pair list. */
+    Vec3f gravity = Vec3f(0.0f, -9.81f, 0.0f);   /**< World gravity vector (m/s^2). */
 
     /**
      * @brief Get number of bodies in the model.

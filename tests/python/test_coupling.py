@@ -93,6 +93,7 @@ def test_fluid_world_boundary_particles():
 
     pbf = novaphy.PBFSettings()
     pbf.kernel_radius = 0.2
+    pbf.vorticity_epsilon = 0.0
 
     world = novaphy.FluidWorld(model, [block], novaphy.SolverSettings(), pbf,
                                 boundary_extent=0.5)
@@ -125,6 +126,7 @@ def test_coupled_simulation_runs():
     pbf = novaphy.PBFSettings()
     pbf.kernel_radius = 0.2
     pbf.solver_iterations = 2
+    pbf.vorticity_epsilon = 0.0
 
     world = novaphy.FluidWorld(model, [block], novaphy.SolverSettings(), pbf,
                                 boundary_extent=0.5)
@@ -160,6 +162,7 @@ def test_coupling_sphere_in_fluid():
     pbf = novaphy.PBFSettings()
     pbf.kernel_radius = 0.2
     pbf.solver_iterations = 2
+    pbf.vorticity_epsilon = 0.0
 
     world_with_fluid = novaphy.FluidWorld(model, [block], novaphy.SolverSettings(),
                                            pbf, boundary_extent=0.5)
@@ -194,6 +197,7 @@ def test_fluid_world_no_coupling_backward_compat():
     pbf = novaphy.PBFSettings()
     pbf.kernel_radius = 0.2
     pbf.solver_iterations = 2
+    pbf.vorticity_epsilon = 0.0
 
     world = novaphy.FluidWorld(model, [block], novaphy.SolverSettings(), pbf)
 
