@@ -5,6 +5,7 @@
 
 #include "novaphy/core/body.h"
 #include "novaphy/core/shape.h"
+#include "novaphy/core/site.h"
 #include "novaphy/math/math_types.h"
 
 namespace novaphy {
@@ -131,6 +132,15 @@ public:
      */
     void add_collision_filter(int shape_a, int shape_b);
 
+    int add_site(const Site& site);
+    int add_site(int body_index,
+                 const Transform& local_transform = Transform::identity(),
+                 const std::string& label = "");
+    int add_site_on_link(int articulation_index, int link_index,
+                         const Transform& local_transform = Transform::identity(),
+                         const std::string& label = "");
+    int num_sites() const { return static_cast<int>(sites_.size()); }
+
     // ---- Scene settings ----
 
     /**
@@ -159,6 +169,7 @@ private:
     std::vector<Transform> initial_transforms_;
     std::vector<CollisionShape> shapes_;
     std::vector<CollisionFilterPair> collision_filter_pairs_;
+    std::vector<Site> sites_;
     Vec3f gravity_ = Vec3f(0.0f, -9.81f, 0.0f);
 };
 

@@ -74,6 +74,19 @@ void FreeBodySolver::solve(std::span<ContactPoint> contacts,
                                                   "world.solver.iteration.solve_velocity");
         solve_velocity(contacts, bodies, linear_velocities, angular_velocities, sleeping);
     }
+
+    // Write back world-space contact impulse for sensor readout
+    for (size_t i = 0; i < contacts.size(); ++i) {
+        auto& cp = contacts[i];
+        auto& cd = constraint_data_[i];
+        if (cd.effective_mass_n == 0.0f) {
+            cp.contact_impulse = Vec3f::Zero();
+            continue;
+        }
+        cp.contact_impulse = cp.normal * cp.accumulated_normal_impulse +
+                             cd.tangent1 * cp.accumulated_tangent_impulse_1 +
+                             cd.tangent2 * cp.accumulated_tangent_impulse_2;
+    }
 }
 
 /**

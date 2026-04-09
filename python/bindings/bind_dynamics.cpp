@@ -214,6 +214,31 @@ void bind_dynamics(py::module_& m) {
             ndarray: Generalized accelerations.
     )pbdoc");
 
+    m.def("forward_link_velocities", [](const Articulation& model,
+                                        const VecXf& q, const VecXf& qd) {
+        auto vs = featherstone::forward_link_velocities(model, q, qd);
+        // Return as list of (angular, linear) tuples in link-local frame
+        py::list result;
+        for (const auto& v : vs) {
+            result.append(py::make_tuple(spatial_angular(v), spatial_linear(v)));
+        }
+        return result;
+    }, py::arg("model"), py::arg("q"), py::arg("qd"),
+    R"pbdoc(
+        Computes per-link spatial velocities from generalized state.
+
+        Each element is a tuple (angular_velocity, linear_velocity) in
+        the link-local frame, following the [angular; linear] convention.
+
+        Args:
+            model (Articulation): Articulation model.
+            q (ndarray): Generalized positions.
+            qd (ndarray): Generalized velocities.
+
+        Returns:
+            list[tuple[Vector3, Vector3]]: (omega, v_linear) per link in link-local frame.
+    )pbdoc");
+
     // --- ArticulatedSolver ---
     py::class_<ArticulatedSolver>(m, "ArticulatedSolver", R"pbdoc(
         Stateful articulated-body integrator built on Featherstone dynamics.

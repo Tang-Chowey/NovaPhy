@@ -10,6 +10,7 @@
 #include "novaphy/core/device.h"
 #include "novaphy/core/model.h"
 #include "novaphy/core/model_builder.h"
+#include "novaphy/core/site.h"
 #include "novaphy/dynamics/solver_base.h"
 #include "novaphy/dynamics/solver_sequential_impulse.h"
 #include "novaphy/dynamics/xpbd_solver.h"
@@ -240,6 +241,52 @@ void bind_sim(py::module_& m) {
                      shape_a (int): First shape index.
                      shape_b (int): Second shape index.
              )pbdoc")
+        .def("add_site",
+             py::overload_cast<const Site&>(&ModelBuilder::add_site),
+             py::arg("site"),
+             R"pbdoc(
+                 Adds a named site and returns its index.
+
+                 Args:
+                     site (Site): Site descriptor.
+
+                 Returns:
+                     int: New site index.
+             )pbdoc")
+        .def("add_site",
+             py::overload_cast<int, const Transform&, const std::string&>(&ModelBuilder::add_site),
+             py::arg("body_index"),
+             py::arg("local_transform") = Transform::identity(),
+             py::arg("label") = "",
+             R"pbdoc(
+                 Adds a site attached to a body with optional local transform and label.
+
+                 Args:
+                     body_index (int): Body to attach to.
+                     local_transform (Transform): Transform from body frame to site frame.
+                     label (str): Human-readable label for pattern matching.
+
+                 Returns:
+                     int: New site index.
+             )pbdoc")
+        .def("add_site_on_link", &ModelBuilder::add_site_on_link,
+             py::arg("articulation_index"),
+             py::arg("link_index"),
+             py::arg("local_transform") = Transform::identity(),
+             py::arg("label") = "",
+             R"pbdoc(
+                 Adds a site attached to an articulation link.
+
+                 Args:
+                     articulation_index (int): Articulation index.
+                     link_index (int): Link index within the articulation.
+                     local_transform (Transform): Transform from link frame to site frame.
+                     label (str): Human-readable label for pattern matching.
+
+                 Returns:
+                     int: New site index.
+             )pbdoc")
+        .def_property_readonly("num_sites", &ModelBuilder::num_sites)
         .def("set_gravity", &ModelBuilder::set_gravity,
              py::arg("gravity"),
              R"pbdoc(
@@ -294,7 +341,12 @@ void bind_sim(py::module_& m) {
         )pbdoc")
         .def_readwrite("articulations", &Model::articulations, R"pbdoc(
             list[Articulation]: Tree-structured articulated robots.
-        )pbdoc");
+        )pbdoc")
+        .def_readonly("sites", &Model::sites, R"pbdoc(
+            list[Site]: Named reference frames attached to bodies/links.
+        )pbdoc")
+        .def_property_readonly("num_sites",
+            [](const Model& m) { return static_cast<int>(m.sites.size()); });
 
     // --- SolverSettings ---
     py::class_<SolverSettings>(m, "SolverSettings", R"pbdoc(

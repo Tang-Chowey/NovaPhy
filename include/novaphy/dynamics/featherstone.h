@@ -110,6 +110,22 @@ VecXf forward_dynamics(const Articulation& model,
                        const Vec3f& gravity,
                        std::span<const SpatialVector> f_ext = {});
 
+/**
+ * @brief Compute per-link spatial velocities from generalized state.
+ *
+ * @details Performs the forward-pass portion of RNEA to compute each
+ * link's spatial velocity in the link-local frame [angular; linear].
+ * Useful for sensor readout (IMU, body velocity queries).
+ *
+ * @param [in] model Articulation graph and joint definitions.
+ * @param [in] q Generalized position vector.
+ * @param [in] qd Generalized velocity vector.
+ * @return Per-link spatial velocities in link-local frame.
+ */
+std::vector<SpatialVector> forward_link_velocities(const Articulation& model,
+                                                   const VecXf& q,
+                                                   const VecXf& qd);
+
 }  // namespace featherstone
 
 }  // namespace novaphy

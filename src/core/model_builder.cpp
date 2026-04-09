@@ -5,6 +5,8 @@
 #include "novaphy/core/model_builder.h"
 
 #include <cmath>
+#include <stdexcept>
+#include <string>
 
 #include "novaphy/core/model.h"
 
@@ -109,12 +111,53 @@ void ModelBuilder::add_collision_filter(int shape_a, int shape_b) {
     collision_filter_pairs_.push_back(pair);
 }
 
+int ModelBuilder::add_site(const Site& site) {
+    bool has_body = site.body_index >= 0;
+    bool has_art  = site.articulation_index >= 0;
+    if (has_body == has_art) {
+        throw std::invalid_argument(
+            "Site must have exactly one attachment: either body_index >= 0 "
+            "or articulation_index >= 0, but not both or neither. "
+            "Got body_index=" + std::to_string(site.body_index) +
+            ", articulation_index=" + std::to_string(site.articulation_index));
+    }
+    if (has_art && site.link_index < 0) {
+        throw std::invalid_argument(
+            "Articulation site requires link_index >= 0, got link_index=" +
+            std::to_string(site.link_index));
+    }
+    int idx = static_cast<int>(sites_.size());
+    sites_.push_back(site);
+    return idx;
+}
+
+int ModelBuilder::add_site(int body_index, const Transform& local_transform,
+                           const std::string& label) {
+    Site s;
+    s.body_index = body_index;
+    s.local_transform = local_transform;
+    s.label = label;
+    return add_site(s);
+}
+
+int ModelBuilder::add_site_on_link(int articulation_index, int link_index,
+                                   const Transform& local_transform,
+                                   const std::string& label) {
+    Site s;
+    s.articulation_index = articulation_index;
+    s.link_index = link_index;
+    s.local_transform = local_transform;
+    s.label = label;
+    return add_site(s);
+}
+
 Model ModelBuilder::build() const {
     Model m;
     m.bodies = bodies_;
     m.initial_transforms = initial_transforms_;
     m.shapes = shapes_;
     m.collision_filter_pairs = collision_filter_pairs_;
+    m.sites = sites_;
     m.gravity = gravity_;
     return m;
 }

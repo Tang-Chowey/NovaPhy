@@ -27,6 +27,8 @@ struct ContactPoint {
     float accumulated_normal_impulse = 0.0f;      /**< Cached normal impulse for warm starting (N*s). */
     float accumulated_tangent_impulse_1 = 0.0f;   /**< Cached first tangent impulse for warm starting (N*s). */
     float accumulated_tangent_impulse_2 = 0.0f;   /**< Cached second tangent impulse for warm starting (N*s). */
+
+    Vec3f contact_impulse = Vec3f::Zero();         /**< Total contact impulse in world frame (N*s) for the current step, written by the free-body solver. */
 };
 
 /**

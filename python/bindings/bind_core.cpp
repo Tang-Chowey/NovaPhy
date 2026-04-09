@@ -6,6 +6,7 @@
 #include "novaphy/core/body.h"
 #include "novaphy/core/contact.h"
 #include "novaphy/core/shape.h"
+#include "novaphy/core/site.h"
 
 namespace py = pybind11;
 using namespace novaphy;
@@ -351,10 +352,40 @@ void bind_core(py::module_& m) {
         .def_readwrite("body_b", &ContactPoint::body_b, R"pbdoc(
             int: Second body index (`-1` may denote world).
         )pbdoc")
+        .def_readwrite("shape_a", &ContactPoint::shape_a, R"pbdoc(
+            int: Shape index for side A.
+        )pbdoc")
+        .def_readwrite("shape_b", &ContactPoint::shape_b, R"pbdoc(
+            int: Shape index for side B.
+        )pbdoc")
         .def_readwrite("friction", &ContactPoint::friction, R"pbdoc(
             float: Combined friction coefficient at the contact.
         )pbdoc")
         .def_readwrite("restitution", &ContactPoint::restitution, R"pbdoc(
             float: Combined restitution coefficient at the contact.
+        )pbdoc")
+        .def_readonly("accumulated_normal_impulse", &ContactPoint::accumulated_normal_impulse, R"pbdoc(
+            float: Accumulated normal impulse from solver (N*s).
+        )pbdoc")
+        .def_readonly("accumulated_tangent_impulse_1", &ContactPoint::accumulated_tangent_impulse_1, R"pbdoc(
+            float: Accumulated first tangent impulse from solver (N*s).
+        )pbdoc")
+        .def_readonly("accumulated_tangent_impulse_2", &ContactPoint::accumulated_tangent_impulse_2, R"pbdoc(
+            float: Accumulated second tangent impulse from solver (N*s).
+        )pbdoc")
+        .def_readonly("contact_impulse", &ContactPoint::contact_impulse, R"pbdoc(
+            Vector3: Total contact impulse in world frame (N*s), written by solver.
         )pbdoc");
+
+    // --- Site ---
+    py::class_<Site>(m, "Site", R"pbdoc(
+        Named reference frame attached to a body or articulation link.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("label", &Site::label)
+        .def_readwrite("local_transform", &Site::local_transform)
+        .def_readwrite("body_index", &Site::body_index)
+        .def_readwrite("articulation_index", &Site::articulation_index)
+        .def_readwrite("link_index", &Site::link_index)
+        .def("is_articulation_site", &Site::is_articulation_site);
 }

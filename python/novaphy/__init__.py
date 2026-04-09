@@ -130,6 +130,7 @@ from novaphy._core import (
     CollisionShape,
     AABB,
     ContactPoint,
+    Site,
     # Collision
     BroadPhasePair,
     SweepAndPrune,
@@ -159,6 +160,7 @@ from novaphy._core import (
     inverse_dynamics,
     mass_matrix_crba,
     forward_dynamics,
+    forward_link_velocities,
     # Fluid simulation
     SPHKernels,
     FluidMaterial,
@@ -236,6 +238,7 @@ __all__ = [
     "CollisionShape",
     "AABB",
     "ContactPoint",
+    "Site",
     "BroadPhasePair",
     "SweepAndPrune",
     "collide_shapes",
@@ -261,6 +264,7 @@ __all__ = [
     "inverse_dynamics",
     "mass_matrix_crba",
     "forward_dynamics",
+    "forward_link_velocities",
     "SPHKernels",
     "FluidMaterial",
     "FluidBlockDef",
@@ -306,7 +310,11 @@ __all__ = [
     # Phase-3 compat wrappers
     "ArticulatedWorld",
     "FluidWorld",
+    "sensors",
 ]
+
+# Sensor framework (Python module)
+from . import sensors  # noqa: E402
 
 # Conditionally export IPC symbols
 if has_ipc():

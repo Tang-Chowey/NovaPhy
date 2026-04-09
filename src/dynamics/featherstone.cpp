@@ -243,6 +243,36 @@ VecXf forward_dynamics(const Articulation& model,
     return qdd;
 }
 
+std::vector<SpatialVector> forward_link_velocities(const Articulation& model,
+                                                   const VecXf& q,
+                                                   const VecXf& qd) {
+    const int n = model.num_links();
+    const auto kinematics = forward_kinematics(model, q);
+
+    std::vector<SpatialVector> v(n);
+    for (int i = 0; i < n; ++i) {
+        const auto& joint = model.joints[i];
+        const int qdi = model.qd_start(i);
+        const int nv_i = joint.num_qd();
+
+        SpatialVector S_cols[6];
+        joint.motion_subspace(S_cols);
+
+        SpatialVector vJ = SpatialVector::Zero();
+        for (int k = 0; k < nv_i; ++k) {
+            vJ += S_cols[k] * qd(qdi + k);
+        }
+
+        if (joint.parent < 0) {
+            v[i] = vJ;
+        } else {
+            v[i] = kinematics.parent_transforms[i].apply_motion(v[joint.parent]) + vJ;
+        }
+    }
+
+    return v;
+}
+
 }  // namespace featherstone
 }  // namespace novaphy
 

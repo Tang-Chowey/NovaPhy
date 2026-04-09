@@ -6,6 +6,7 @@
 #include "novaphy/core/articulation.h"
 #include "novaphy/core/body.h"
 #include "novaphy/core/shape.h"
+#include "novaphy/core/site.h"
 #include "novaphy/fluid/particle_state.h"
 #include "novaphy/math/math_types.h"
 
@@ -37,6 +38,7 @@ struct Model {
     std::vector<FluidBlockDef> fluid_blocks;      /**< Definitions for generating fluid particles. */
     std::vector<FluidMaterial> fluid_materials;   /**< Optional multi-material table (indexed by block.material_index). */
     std::vector<CollisionFilterPair> collision_filter_pairs;  /**< Disabled shape-pair list. */
+    std::vector<Site> sites;  /**< Named reference frames attached to bodies/links. */
     Vec3f gravity = Vec3f(0.0f, -9.81f, 0.0f);   /**< World gravity vector (m/s^2). */
 
     /**
@@ -52,6 +54,8 @@ struct Model {
      * @return Shape count.
      */
     int num_shapes() const { return static_cast<int>(shapes.size()); }
+
+    int num_sites() const { return static_cast<int>(sites.size()); }
 
     /**
      * @brief Check whether a shape pair is disabled by the model filter.
