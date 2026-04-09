@@ -220,6 +220,17 @@ void bind_sim(py::module_& m) {
                 Returns:
                     int: New body index.
             )pbdoc")
+        .def("add_articulation", &ModelBuilder::add_articulation,
+             py::arg("articulation"),
+             R"pbdoc(
+                 Adds an articulated body and returns its index.
+
+                 Args:
+                     articulation (Articulation): Articulation topology and properties.
+
+                 Returns:
+                     int: New articulation index.
+             )pbdoc")
         .def("add_shape_to_body", &ModelBuilder::add_shape_to_body,
              py::arg("body_index"), py::arg("shape"),
              R"pbdoc(
@@ -378,6 +389,37 @@ void bind_sim(py::module_& m) {
         )pbdoc")
         .def_readwrite("sleep_ema_alpha", &SolverSettings::sleep_ema_alpha, R"pbdoc(
             float: EMA smoothing factor for energy (0-1).
+        )pbdoc");
+
+    // --- MultiBodySolverSettings ---
+    py::class_<MultiBodySolverSettings>(m, "MultiBodySolverSettings", R"pbdoc(
+        Configuration for the Featherstone ABA + PGS multibody constraint solver.
+
+        When passed to the World constructor, articulations use the multibody
+        pipeline (ABA forward dynamics + PGS contact/constraint solve) instead
+        of the default XPBD path.
+    )pbdoc")
+        .def(py::init<>())
+        .def_readwrite("num_iterations", &MultiBodySolverSettings::num_iterations, R"pbdoc(
+            int: PGS iteration count per time step.
+        )pbdoc")
+        .def_readwrite("erp", &MultiBodySolverSettings::erp, R"pbdoc(
+            float: Error reduction parameter for contacts.
+        )pbdoc")
+        .def_readwrite("cfm", &MultiBodySolverSettings::cfm, R"pbdoc(
+            float: Constraint force mixing (regularization).
+        )pbdoc")
+        .def_readwrite("linear_slop", &MultiBodySolverSettings::linear_slop, R"pbdoc(
+            float: Penetration tolerance before correction (m).
+        )pbdoc")
+        .def_readwrite("warmstarting_factor", &MultiBodySolverSettings::warmstarting_factor, R"pbdoc(
+            float: Warm-starting scaling factor.
+        )pbdoc")
+        .def_readwrite("restitution_threshold", &MultiBodySolverSettings::restitution_threshold, R"pbdoc(
+            float: Minimum relative velocity for restitution.
+        )pbdoc")
+        .def_readwrite("use_warmstarting", &MultiBodySolverSettings::use_warmstarting, R"pbdoc(
+            bool: Enable warm-starting.
         )pbdoc");
 
     // --- SolverBase (abstract) ---
@@ -621,20 +663,25 @@ void bind_sim(py::module_& m) {
     )pbdoc")
         .def(
             py::init([](const Model& model, py::object solver_settings, py::object xpbd_settings,
-                        py::object pbf_settings, float fluid_boundary_extent) {
+                        py::object pbf_settings, float fluid_boundary_extent,
+                        py::object multibody_settings) {
                 SolverSettings ss =
                     solver_settings.is_none() ? SolverSettings{} : solver_settings.cast<SolverSettings>();
                 XPBDSolverSettings xs =
                     xpbd_settings.is_none() ? XPBDSolverSettings{} : xpbd_settings.cast<XPBDSolverSettings>();
                 PBFSettings ps =
                     pbf_settings.is_none() ? PBFSettings{} : pbf_settings.cast<PBFSettings>();
-                return std::make_unique<World>(model, ss, xs, ps, fluid_boundary_extent);
+                std::optional<MultiBodySolverSettings> mbs;
+                if (!multibody_settings.is_none())
+                    mbs = multibody_settings.cast<MultiBodySolverSettings>();
+                return std::make_unique<World>(model, ss, xs, ps, fluid_boundary_extent, mbs);
             }),
              py::arg("model"),
              py::arg("solver_settings") = py::none(),
              py::arg("xpbd_settings") = py::none(),
              py::arg("pbf_settings") = py::none(),
              py::arg("fluid_boundary_extent") = 1.0f,
+             py::arg("multibody_settings") = py::none(),
              R"pbdoc(
                  Creates a unified simulation world from an immutable model.
 
@@ -644,6 +691,8 @@ void bind_sim(py::module_& m) {
                      xpbd_settings (XPBDSolverSettings): XPBD solver parameters for articulations.
                      pbf_settings (PBFSettings): PBF solver parameters for fluid particles.
                      fluid_boundary_extent (float): Half-extent for plane boundary sampling (m).
+                     multibody_settings (MultiBodySolverSettings): When provided,
+                         uses Featherstone ABA + PGS instead of XPBD for articulations.
              )pbdoc")
         .def("step", static_cast<void (World::*)(float)>(&World::step),
              py::arg("dt"),
@@ -732,6 +781,20 @@ void bind_sim(py::module_& m) {
              py::return_value_policy::reference_internal,
              R"pbdoc(
                  list[BoundaryParticle]: Boundary particles sampled from rigid shapes.
+             )pbdoc")
+        .def_property_readonly("multibody_contacts",
+             [](py::object self) -> py::object {
+                 const World& w = self.cast<const World&>();
+                 auto* mbs = w.multibody_solver();
+                 // reference_internal needs an explicit parent handle when casting inside a lambda;
+                 // otherwise the default parent is null and keep_alive_impl fails at runtime.
+                 if (mbs) {
+                     return py::cast(mbs->contacts(), py::return_value_policy::reference_internal, self);
+                 }
+                 return py::cast(std::vector<ContactPoint>{});
+             },
+             R"pbdoc(
+                 list[ContactPoint]: Contact points from the multibody solver (empty if not active).
              )pbdoc");
 }
 

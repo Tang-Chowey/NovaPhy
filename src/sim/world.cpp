@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <numbers>
+#include <optional>
 
 #include "novaphy/fluid/sph_kernel.h"
 #include "novaphy/dynamics/featherstone.h"
@@ -30,7 +31,8 @@ World::World(const Model& model,
              SolverSettings solver_settings,
              XPBDSolverSettings xpbd_settings,
              PBFSettings pbf_settings,
-             float fluid_boundary_extent)
+             float fluid_boundary_extent,
+             std::optional<MultiBodySolverSettings> multibody_settings)
     : model_(model),
       solver_(std::make_unique<SolverSequentialImpulse>(solver_settings)),
       xpbd_solver_(xpbd_settings),
@@ -41,6 +43,12 @@ World::World(const Model& model,
     // Initialize simulation state
     state_ = SimState::from_model(model_, Device::cpu());
     solver_->set_performance_monitor(&performance_monitor_);
+
+    // Initialize multibody solver if settings provided (handles both articulated and free bodies)
+    if (multibody_settings.has_value()) {
+        multibody_solver_ = std::make_unique<MultiBodySolver>(multibody_settings.value());
+        multibody_solver_->init(model_, state_);
+    }
 
     // Generate fluid particles from all blocks (multi-block / multi-material)
     std::vector<Vec3f> all_positions;
@@ -66,19 +74,19 @@ World::World(const Model& model,
         state_.fluid_state.init(all_positions, all_velocities, all_masses, all_rest_rho);
         particle_mass_ = all_masses.empty() ? pbf_settings.particle_mass(particle_spacing_)
                                             : all_masses[0];
-    }
 
-    // Generate boundary particles from all rigid body and articulation shapes
-    boundary_particles_ = sample_model_boundaries(model, particle_spacing_, fluid_boundary_extent);
+        // Generate boundary particles from all rigid body and articulation shapes
+        boundary_particles_ = sample_model_boundaries(model, particle_spacing_, fluid_boundary_extent);
 
-    // Compute initial boundary volumes (Akinci)
-    if (!boundary_particles_.empty()) {
-        std::vector<std::vector<Transform>> art_transforms(model.articulations.size());
-        for (size_t a = 0; a < model.articulations.size(); ++a) {
-            art_transforms[a] = featherstone::forward_kinematics(model.articulations[a], state_.q[a]).world_transforms;
+        // Compute initial boundary volumes (Akinci)
+        if (!boundary_particles_.empty()) {
+            std::vector<std::vector<Transform>> art_transforms(model.articulations.size());
+            for (size_t a = 0; a < model.articulations.size(); ++a) {
+                art_transforms[a] = featherstone::forward_kinematics(model.articulations[a], state_.q[a]).world_transforms;
+            }
+            auto bpos = boundary_world_positions(boundary_particles_, state_.transforms, art_transforms);
+            compute_boundary_volumes(boundary_particles_, bpos, pbf_settings.kernel_radius);
         }
-        auto bpos = boundary_world_positions(boundary_particles_, state_.transforms, art_transforms);
-        compute_boundary_volumes(boundary_particles_, bpos, pbf_settings.kernel_radius);
     }
 }
 
@@ -127,49 +135,56 @@ void World::step(SimState& state, const Control& control, float dt) {
             }
         }
 
-        // 3. Rigid Body Step
-        if (model_.num_bodies() > 0) {
-            detail::PerformancePhaseScope phase_scope(&performance_monitor_, "rigid.step");
-            solver_->step(model_, state, control, dt, gravity());
-        }
-
-        // 4. Articulation Step
-        if (!model_.articulations.empty()) {
-            detail::PerformancePhaseScope phase_scope(&performance_monitor_, "articulation.step");
-            int total_articulation_qd = 0;
-            for (const auto& articulation : model_.articulations) {
-                total_articulation_qd += articulation.total_qd();
+        // 3 & 4. Dispatch to multibody solver or default solvers
+        if (multibody_solver_) {
+            detail::PerformancePhaseScope phase_scope(&performance_monitor_, "multibody.step");
+            multibody_solver_->step(model_, state, control, gravity(), dt);
+        } else {
+            // 3. Free body step (Sequential Impulse)
+            if (model_.num_bodies() > 0) {
+                detail::PerformancePhaseScope phase_scope(&performance_monitor_, "rigid.step");
+                solver_->step(model_, state, control, dt, gravity());
             }
 
-            const bool has_flat_joint_forces =
-                control.joint_forces.size() == total_articulation_qd;
-            int flat_joint_force_offset = 0;
+            // 4. Articulation step (XPBD)
+            if (!model_.articulations.empty()) {
+                detail::PerformancePhaseScope phase_scope(&performance_monitor_, "articulation.step");
 
-            for (size_t a = 0; a < model_.articulations.size(); ++a) {
-                const auto& art = model_.articulations[a];
-                
-                VecXf tau = VecXf::Zero(art.total_qd());
-                if (a < control.articulation_joint_forces.size() &&
-                    control.articulation_joint_forces[a].size() == art.total_qd()) {
-                    tau = control.articulation_joint_forces[a];
-                } else if (has_flat_joint_forces) {
-                    tau = control.joint_forces.segment(flat_joint_force_offset, art.total_qd());
-                } else if (model_.articulations.size() == 1 &&
-                           control.joint_forces.size() == art.total_qd()) {
-                    tau = control.joint_forces;
+                int total_articulation_qd = 0;
+                for (const auto& articulation : model_.articulations) {
+                    total_articulation_qd += articulation.total_qd();
                 }
 
-                std::vector<CollisionShape> static_shapes; 
-                for (const auto& sb : model_.shapes) {
-                    if (sb.body_index < 0 && sb.articulation_index < 0) {
-                        static_shapes.push_back(sb);
+                const bool has_flat_joint_forces =
+                    control.joint_forces.size() == total_articulation_qd;
+                int flat_joint_force_offset = 0;
+
+                for (size_t a = 0; a < model_.articulations.size(); ++a) {
+                    const auto& art = model_.articulations[a];
+                    
+                    VecXf tau = VecXf::Zero(art.total_qd());
+                    if (a < control.articulation_joint_forces.size() &&
+                        control.articulation_joint_forces[a].size() == art.total_qd()) {
+                        tau = control.articulation_joint_forces[a];
+                    } else if (has_flat_joint_forces) {
+                        tau = control.joint_forces.segment(flat_joint_force_offset, art.total_qd());
+                    } else if (model_.articulations.size() == 1 &&
+                               control.joint_forces.size() == art.total_qd()) {
+                        tau = control.joint_forces;
                     }
-                }
 
-                xpbd_solver_.step_with_contacts(art, model_, static_shapes, 
-                                                state.q[a], state.qd[a], tau, gravity(), dt, 
-                                                control, state.articulation_forces[a]);
-                flat_joint_force_offset += art.total_qd();
+                    std::vector<CollisionShape> static_shapes; 
+                    for (const auto& sb : model_.shapes) {
+                        if (sb.body_index < 0 && sb.articulation_index < 0) {
+                            static_shapes.push_back(sb);
+                        }
+                    }
+
+                    xpbd_solver_.step_with_contacts(art, model_, static_shapes, 
+                                                    state.q[a], state.qd[a], tau, gravity(), dt, 
+                                                    control, state.articulation_forces[a]);
+                    flat_joint_force_offset += art.total_qd();
+                }
             }
         }
 

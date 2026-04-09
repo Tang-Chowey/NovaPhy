@@ -45,6 +45,12 @@ void bind_core(py::module_& m) {
         .def_readwrite("com", &RigidBody::com, R"pbdoc(
             Vector3: Center of mass in body-local coordinates (m).
         )pbdoc")
+        .def_readwrite("linear_damping", &RigidBody::linear_damping, R"pbdoc(
+            float: Linear velocity damping coefficient.
+        )pbdoc")
+        .def_readwrite("angular_damping", &RigidBody::angular_damping, R"pbdoc(
+            float: Angular velocity damping coefficient.
+        )pbdoc")
         .def("inv_mass", &RigidBody::inv_mass, R"pbdoc(
             Returns inverse mass.
 

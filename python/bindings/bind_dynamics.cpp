@@ -138,6 +138,12 @@ void bind_dynamics(py::module_& m) {
             Returns:
                 int: Start index into the generalized-velocity vector.
         )pbdoc")
+        .def_readwrite("linear_damping", &Articulation::linear_damping, R"pbdoc(
+            float: Linear velocity damping coefficient for the articulation.
+        )pbdoc")
+        .def_readwrite("angular_damping", &Articulation::angular_damping, R"pbdoc(
+            float: Angular velocity damping coefficient for the articulation.
+        )pbdoc")
         .def("build_spatial_inertias", &Articulation::build_spatial_inertias, R"pbdoc(
             Builds per-link spatial inertia matrices from rigid-body properties.
 

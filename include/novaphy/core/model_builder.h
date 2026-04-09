@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "novaphy/core/articulation.h"
 #include "novaphy/core/body.h"
 #include "novaphy/core/shape.h"
 #include "novaphy/core/site.h"
@@ -122,6 +123,16 @@ public:
      */
     int add_shape_to_body(int body_index, const CollisionShape& shape);
 
+    // ---- Articulations ----
+
+    /**
+     * @brief Add an articulated body to the model.
+     *
+     * @param [in] articulation Articulation topology and properties.
+     * @return Index of inserted articulation.
+     */
+    int add_articulation(const Articulation& articulation);
+
     // ---- Collision filtering ----
 
     /**
@@ -168,6 +179,7 @@ private:
     std::vector<RigidBody> bodies_;
     std::vector<Transform> initial_transforms_;
     std::vector<CollisionShape> shapes_;
+    std::vector<Articulation> articulations_;
     std::vector<CollisionFilterPair> collision_filter_pairs_;
     std::vector<Site> sites_;
     Vec3f gravity_ = Vec3f(0.0f, -9.81f, 0.0f);

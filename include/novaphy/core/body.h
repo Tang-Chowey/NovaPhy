@@ -18,6 +18,8 @@ struct RigidBody {
     float mass = 1.0f;                  /**< Body mass in kilograms (kg). */
     Mat3f inertia = Mat3f::Identity();  /**< Body-frame inertia tensor about CoM (kg*m^2). */
     Vec3f com = Vec3f::Zero();          /**< Center of mass in body-local coordinates (m). */
+    float linear_damping = 0.0f;        /**< Linear velocity damping coefficient. */
+    float angular_damping = 0.0f;       /**< Angular velocity damping coefficient. */
 
     /**
      * @brief Get inverse mass.

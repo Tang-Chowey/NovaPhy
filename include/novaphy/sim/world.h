@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "novaphy/core/contact.h"
 #include "novaphy/core/control.h"
 #include "novaphy/core/model.h"
+#include "novaphy/multibody/multibody_solver.h"
 #include "novaphy/dynamics/solver_base.h"
 #include "novaphy/dynamics/solver_sequential_impulse.h"
 #include "novaphy/dynamics/xpbd_solver.h"
@@ -39,12 +41,14 @@ public:
      * @param [in] xpbd_settings XPBD solver settings for articulations.
      * @param [in] pbf_settings PBF solver settings for fluid particles.
      * @param [in] fluid_boundary_extent Half-extent for plane boundary sampling (m).
+     * @param [in] multibody_settings Multibody PGS solver settings. 
      */
     explicit World(const Model& model, 
                    SolverSettings solver_settings = {},
                    XPBDSolverSettings xpbd_settings = {},
                    PBFSettings pbf_settings = {},
-                   float fluid_boundary_extent = 1.0f);
+                   float fluid_boundary_extent = 1.0f,
+                   std::optional<MultiBodySolverSettings> multibody_settings = std::nullopt);
 
     /**
      * @brief Advance the simulation by one time step using internal state.
@@ -95,6 +99,10 @@ public:
     XPBDSolver& xpbd_solver() { return xpbd_solver_; }
     const XPBDSolver& xpbd_solver() const { return xpbd_solver_; }
 
+    /** @brief Access the multibody solver (nullptr if not active). */
+    MultiBodySolver* multibody_solver() { return multibody_solver_.get(); }
+    const MultiBodySolver* multibody_solver() const { return multibody_solver_.get(); }
+
     /** @brief Mutable access to the fluid PBF solver. */
     PBFSolver& pbf_solver() { return pbf_solver_; }
     const PBFSolver& pbf_solver() const { return pbf_solver_; }
@@ -134,9 +142,10 @@ protected:
     Control control_; // User control input buffer
 
     // Sub-solvers
-    std::unique_ptr<SolverBase> solver_; // Rigid body solver
-    XPBDSolver xpbd_solver_;             // Articulated tree solver
-    PBFSolver pbf_solver_;               // Fluid SPH solver
+    std::unique_ptr<SolverBase> solver_;           // Rigid body solver
+    XPBDSolver xpbd_solver_;                        // Articulated tree solver (XPBD path)
+    std::unique_ptr<MultiBodySolver> multibody_solver_; // Articulated solver (ABA+PGS path)
+    PBFSolver pbf_solver_;                          // Fluid SPH solver
 
     // Fluid boundary tracking
     std::vector<BoundaryParticle> boundary_particles_;

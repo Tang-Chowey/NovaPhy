@@ -15,6 +15,10 @@ add_library(novaphy_core STATIC
     dynamics/featherstone.cpp
     dynamics/articulated_solver.cpp
     dynamics/xpbd_solver.cpp
+    multibody/multibody.cpp
+    multibody/multibody_constraint.cpp
+    multibody/multibody_solver.cpp
+    multibody/free_rigid_body.cpp
     dynamics/solver_sequential_impulse.cpp
     sim/performance_monitor.cpp
     sim/state.cpp
@@ -22,7 +26,6 @@ add_library(novaphy_core STATIC
     fluid/particle_state.cpp
     fluid/neighbor_search.cpp
     fluid/pbf_solver.cpp
-    fluid/boundary.cpp
     fluid/boundary.cpp
     io/urdf_parser.cpp
     io/openusd_importer.cpp

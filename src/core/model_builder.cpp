@@ -98,6 +98,12 @@ int ModelBuilder::add_shape_cylinder(float radius, float half_length,
     return body_idx;
 }
 
+int ModelBuilder::add_articulation(const Articulation& articulation) {
+    int idx = static_cast<int>(articulations_.size());
+    articulations_.push_back(articulation);
+    return idx;
+}
+
 int ModelBuilder::add_shape_to_body(int body_index, const CollisionShape& shape) {
     CollisionShape s = shape;
     s.body_index = body_index;
@@ -156,6 +162,7 @@ Model ModelBuilder::build() const {
     m.bodies = bodies_;
     m.initial_transforms = initial_transforms_;
     m.shapes = shapes_;
+    m.articulations = articulations_;
     m.collision_filter_pairs = collision_filter_pairs_;
     m.sites = sites_;
     m.gravity = gravity_;

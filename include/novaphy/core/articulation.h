@@ -20,6 +20,9 @@ struct Articulation {
     std::vector<RigidBody> bodies;       /**< Rigid-body inertial properties per link. */
     std::vector<SpatialMatrix> I_body;   /**< Spatial inertia matrix per link in body frame. */
 
+    float linear_damping = 0.0f;         /**< Linear velocity damping coefficient. */
+    float angular_damping = 0.0f;        /**< Angular velocity damping coefficient. */
+
     /**
      * @brief Get total number of links.
      *

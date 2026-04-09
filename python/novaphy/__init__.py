@@ -160,6 +160,8 @@ from novaphy._core import (
     inverse_dynamics,
     mass_matrix_crba,
     forward_dynamics,
+    # Multibody solver settings (for World constructor)
+    MultiBodySolverSettings,
     forward_link_velocities,
     # Fluid simulation
     SPHKernels,
@@ -264,6 +266,7 @@ __all__ = [
     "inverse_dynamics",
     "mass_matrix_crba",
     "forward_dynamics",
+    "MultiBodySolverSettings",
     "forward_link_velocities",
     "SPHKernels",
     "FluidMaterial",
