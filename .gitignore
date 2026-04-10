@@ -1,11 +1,13 @@
 # Build
 build/
 _build/
+build-*/
 dist/
 *.egg-info/
 __pycache__/
 *.pyc
 *.pyo
+*.whl
 
 # C++ artifacts
 *.o
@@ -42,6 +44,7 @@ nul
 # Env
 .env
 *.egg
+.venv/
 
 # External dependencies build artifacts
 external/libuipc/build/

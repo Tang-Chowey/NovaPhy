@@ -3,6 +3,7 @@
 #include "novaphy/core/model.h"
 #include "novaphy/sim/state.h"
 #include "novaphy/vbd/vbd_config.h"
+#include "novaphy/novaphy.h"
 
 #include <limits>
 #include <memory>
@@ -24,7 +25,7 @@ class VbdSolver;
  * CPU and CUDA backends use separate Impl subclasses so the CUDA step path
  * never touches CPU solver code.
  */
-class VBDWorld {
+class NOVAPHY_API VBDWorld {
 public:
     /**
      * @brief Construct a VBD world from a NovaPhy model.

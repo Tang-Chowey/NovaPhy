@@ -27,27 +27,23 @@ target_link_libraries(_core PRIVATE
 
 if(NOVAPHY_WITH_IPC)
     target_link_libraries(_core PRIVATE novaphy_ipc)
-    target_compile_definitions(_core PRIVATE NOVAPHY_HAS_IPC=1)
+    # C++20 needed for bind_ipc.cpp which includes libuipc headers
+    set_source_files_properties(bind_ipc.cpp PROPERTIES
+        COMPILE_FLAGS "$<$<CXX_COMPILER_ID:MSVC>:/std:c++20>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-std=c++20>"
+    )
+
 endif()
 
-# Link VBD/AVBD (Windows: STATIC like novaphy_ipc; Unix: SHARED with RPATH below)
 target_link_libraries(_core PRIVATE novaphy_vbd)
 
-# So the loader finds libnovaphy_vbd.so from build tree and when installed (CI / editable)
-if(UNIX)
-    set_target_properties(_core PROPERTIES
-        BUILD_RPATH "$<TARGET_FILE_DIR:novaphy_vbd>"
-        INSTALL_RPATH "$ORIGIN"
+novaphy_export_pybind(_core)
+
+if (SKBUILD AND NOVAPHY_BUNDLE_DEPENDENCIES)
+    novaphy_bundle_dependencies(_core)
+    # The dependency of libuipc is hidden by CMake's target system, so we need to explicitly bundle it here
+    novaphy_bundle_files(GLOB
+        "${CMAKE_BINARY_DIR}/${NOVAPHY_CONFIG_TYPE}/bin/*.dll" 
+        "${CMAKE_BINARY_DIR}/${NOVAPHY_CONFIG_TYPE}/bin/*.so" 
+        "${CMAKE_BINARY_DIR}/${NOVAPHY_CONFIG_TYPE}/bin/*.dylib"
     )
-endif()
-
-target_compile_definitions(_core PRIVATE
-    VERSION_INFO=${PROJECT_VERSION}
-)
-
-install(TARGETS _core DESTINATION novaphy)
-
-# Install VBD shared library only on Unix (on Windows novaphy_vbd is STATIC and linked into _core).
-if(TARGET novaphy_vbd AND NOT MSVC)
-    install(TARGETS novaphy_vbd DESTINATION novaphy)
 endif()

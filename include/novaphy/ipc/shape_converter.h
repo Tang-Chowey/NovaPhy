@@ -3,6 +3,8 @@
 #include "novaphy/core/shape.h"
 #include "novaphy/math/math_types.h"
 
+#include "novaphy/novaphy.h"
+
 #include <vector>
 
 namespace novaphy {
@@ -27,7 +29,7 @@ struct TetMeshData {
  * @param half_extents Box half-extents in meters.
  * @return Tet mesh representation.
  */
-TetMeshData box_to_tetmesh(const Vec3f& half_extents);
+NOVAPHY_API TetMeshData box_to_tetmesh(const Vec3f& half_extents);
 
 /**
  * @brief Convert a sphere to a tetrahedral mesh via icosphere subdivision.
@@ -38,7 +40,7 @@ TetMeshData box_to_tetmesh(const Vec3f& half_extents);
  * @param subdivisions Number of icosphere subdivisions (0 = icosahedron).
  * @return Tet mesh representation.
  */
-TetMeshData sphere_to_tetmesh(float radius, int subdivisions = 1);
+NOVAPHY_API TetMeshData sphere_to_tetmesh(float radius, int subdivisions = 1);
 
 /**
  * @brief Convert a cylinder to a tetrahedral mesh.

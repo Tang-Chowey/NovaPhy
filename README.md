@@ -23,7 +23,7 @@ A C++20/Python 3D physics engine for embodied intelligence (robotics, RL, sim-to
 - [vcpkg](https://vcpkg.io/) installed
 - C++20 compiler (MSVC 2022, GCC 11+, Clang 14+)
 - *(Optional for IPC)* CUDA ≥ 12.4
-- *(Optional for VBD CUDA)* CUDA toolkit + NVCC
+- *(Optional for VBD CUDA backend)* CUDA toolkit + NVCC
 
 ### Setup
 
@@ -44,6 +44,8 @@ CMAKE_ARGS="-DNOVAPHY_WITH_IPC=ON -DCMAKE_CUDA_COMPILER=/path/to/nvcc" pip insta
 # (Optional) VBD with CUDA backend 
 CMAKE_ARGS="-DNOVAPHY_WITH_VBD_CUDA=ON -DCMAKE_CUDA_COMPILER=/path/to/nvcc" pip install -e .
 ```
+
+See [build.md](compat/build.md) for details.
 
 ### Verify
 

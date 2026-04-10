@@ -1,0 +1,34 @@
+From f63f833a5c1186ee4a1a0cba64490a9874364880 Mon Sep 17 00:00:00 2001
+From: Antonio Sanchez <cantonios@google.com>
+Date: Thu, 6 Jul 2023 21:45:18 +0000
+Subject: [PATCH] Fix use of arg function in CUDA.
+
+A global ::arg does not officially exist, and fails with MSVC+C++20.
+Replacing it with `std::arg` seems to work on device.
+
+Fixes #2690.
+---
+ Eigen/src/Core/MathFunctions.h | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/Eigen/src/Core/MathFunctions.h b/Eigen/src/Core/MathFunctions.h
+index 822701bc3a..55077071b0 100644
+--- a/Eigen/src/Core/MathFunctions.h
++++ b/Eigen/src/Core/MathFunctions.h
+@@ -482,12 +482,8 @@ struct arg_default_impl<Scalar, true> {
+   EIGEN_DEVICE_FUNC
+   static inline RealScalar run(const Scalar& x)
+   {
+-    #if defined(EIGEN_HIP_DEVICE_COMPILE)
+-    // HIP does not seem to have a native device side implementation for the math routine "arg"
++    // There is no official ::arg on device in CUDA/HIP, so we always need to use std::arg.
+     using std::arg;
+-    #else
+-    EIGEN_USING_STD(arg);
+-    #endif
+     return static_cast<RealScalar>(arg(x));
+   }
+ };
+-- 
+GitLab
+

@@ -4,6 +4,8 @@
 #include "novaphy/ipc/ipc_config.h"
 #include "novaphy/sim/state.h"
 
+#include "novaphy/novaphy.h"
+
 #include <memory>
 #include <vector>
 
@@ -19,7 +21,7 @@ namespace novaphy {
  * Implementation is hidden behind a pimpl to keep libuipc headers out of the
  * public NovaPhy interface.
  */
-class IPCWorld {
+class NOVAPHY_API IPCWorld {
 public:
     /**
      * @brief Construct an IPC world from a NovaPhy model.

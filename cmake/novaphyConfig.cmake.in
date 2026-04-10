@@ -1,0 +1,34 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+set(_novaphy_deps "@dependencies@")
+foreach(_dep IN LISTS _novaphy_deps)
+    find_dependency(${_dep})
+endforeach()
+
+set(_novaphy_supported_components "@components@")
+
+if(NOT novaphy_FIND_COMPONENTS)
+    set(novaphy_FIND_COMPONENTS ${_novaphy_supported_components})
+endif()
+
+foreach(_comp IN LISTS novaphy_FIND_COMPONENTS)
+    if(NOT _comp IN_LIST _novaphy_supported_components)
+        set(novaphy_FOUND FALSE)
+        set(novaphy_NOT_FOUND_MESSAGE "novaphy does not have component: ${_comp}")
+        break()
+    endif()
+
+    set(_targets_file "${CMAKE_CURRENT_LIST_DIR}/novaphy-${_comp}-targets.cmake")
+    
+    if(EXISTS "${_targets_file}")
+        include("${_targets_file}")
+    else()
+        set(novaphy_FOUND FALSE)
+        set(novaphy_NOT_FOUND_MESSAGE "novaphy component ${_comp} is missing targets file!")
+        break()
+    endif()
+endforeach()
+
+check_required_components(novaphy)

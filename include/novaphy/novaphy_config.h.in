@@ -1,0 +1,20 @@
+#pragma once
+
+#define NOVAPHY_MAJOR_VERSION @PROJECT_VERSION_MAJOR@
+#define NOVAPHY_MINOR_VERSION @PROJECT_VERSION_MINOR@
+#define NOVAPHY_PATCH_VERSION @PROJECT_VERSION_PATCH@
+#define NOVAPHY_VERSION "@PROJECT_VERSION@"
+
+#cmakedefine01 NOVAPHY_WITH_IPC
+
+#if defined(_WIN32)
+    #if defined(NOVAPHY_BUILDING)
+        #define NOVAPHY_API __declspec(dllexport)
+    #else
+        #define NOVAPHY_API __declspec(dllimport)
+    #endif
+#elif defined(__GNUC__) || defined(__clang__)
+    #define NOVAPHY_API __attribute__((visibility("default")))
+#else
+    #define NOVAPHY_API
+#endif

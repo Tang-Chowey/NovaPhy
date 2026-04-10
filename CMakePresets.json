@@ -2,8 +2,20 @@
     "version": 3,
     "configurePresets": [
         {
+            "name": "base_configure",
+            "hidden": true,
+            "description": "It set the common configure. DO NOT USE THIS PRESET DIRECTLY.",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "type": "FILEPATH",
+                    "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+                }
+            }
+        },
+        {
             "name": "default",
-            "binaryDir": "${sourceDir}/build",
+            "binaryDir": "${sourceDir}/build-release",
+            "inherits": "base_configure",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
@@ -11,6 +23,7 @@
         {
             "name": "debug",
             "binaryDir": "${sourceDir}/build-debug",
+            "inherits": "base_configure",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
@@ -19,8 +32,27 @@
             "name": "ipc",
             "displayName": "Release with IPC (libuipc + CUDA)",
             "binaryDir": "${sourceDir}/build-ipc",
+            "inherits": "base_configure",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
+                "NOVAPHY_WITH_IPC": "ON"
+            }
+        },
+        {
+            "name": "default-ci",
+            "binaryDir": "${sourceDir}/build-ci",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": {
+                    "type": "FILEPATH",
+                    "value": "$env{VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+                }
+            }
+        },
+        {
+            "name": "ipc-ci",
+            "inherits": "default-ci",
+            "cacheVariables": {
                 "NOVAPHY_WITH_IPC": "ON"
             }
         }
@@ -37,6 +69,34 @@
         {
             "name": "ipc",
             "configurePreset": "ipc"
+        },
+        {
+            "name": "default-ci",
+            "configurePreset": "default-ci",
+            "configuration": "Release"
+        },
+        {
+            "name": "ipc-ci",
+            "configurePreset": "ipc-ci",
+            "configuration": "Release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "default-ci",
+            "configurePreset": "default-ci",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "ipc-ci",
+            "configurePreset": "ipc-ci",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            }
         }
     ]
 }
